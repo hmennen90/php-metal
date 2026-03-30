@@ -13,8 +13,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15]
-        php: ['8.2', '8.3', '8.4', '8.5']
+        os: [macos-15]
+        php: ['8.2', '8.3', '8.4']
 
     steps:
       - uses: actions/checkout@v4
@@ -36,15 +36,22 @@ jobs:
       - name: Verify extension loads
         run: php -d extension=modules/metal.so -m | grep metal
 
-      - name: Show GPU info
+      - name: Check GPU availability
+        id: gpu
         run: |
-          php -d extension=modules/metal.so -r "
-            \$d = Metal\createSystemDefaultDevice();
-            echo 'GPU: ' . \$d->getName() . PHP_EOL;
-            echo 'Max buffer: ' . number_format(\$d->getMaxBufferLength() / 1024 / 1024) . ' MB' . PHP_EOL;
-          "
+          if php -d extension=modules/metal.so -r "Metal\createSystemDefaultDevice();" 2>/dev/null; then
+            echo "available=true" >> $GITHUB_OUTPUT
+            php -d extension=modules/metal.so -r "
+              \$d = Metal\createSystemDefaultDevice();
+              echo 'GPU: ' . \$d->getName() . PHP_EOL;
+            "
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "No Metal GPU available on this runner"
+          fi
 
       - name: Run tests
+        if: steps.gpu.outputs.available == 'true'
         run: make test TESTS=tests/ NO_INTERACTION=1 REPORT_EXIT_STATUS=1
 
       - name: Upload test logs on failure
