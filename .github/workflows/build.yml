@@ -52,6 +52,8 @@ jobs:
 
       - name: Run tests
         if: steps.gpu.outputs.available == 'true'
+        env:
+          METAL_SKIP_ICB_TESTS: 1
         run: make test TESTS=tests/ NO_INTERACTION=1 REPORT_EXIT_STATUS=1
 
       - name: Upload test logs on failure

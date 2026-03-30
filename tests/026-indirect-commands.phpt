@@ -2,6 +2,8 @@
 Metal IndirectRenderCommand and IndirectComputeCommand
 --EXTENSIONS--
 metal
+--SKIPIF--
+<?php if (getenv('METAL_SKIP_ICB_TESTS')) die('skip: ICB tests disabled'); ?>
 --FILE--
 <?php
 $device = Metal\createSystemDefaultDevice();

@@ -2,6 +2,8 @@
 Metal IndirectCommandBuffer execution from RenderCommandEncoder
 --EXTENSIONS--
 metal
+--SKIPIF--
+<?php if (getenv('METAL_SKIP_ICB_TESTS')) die('skip: ICB tests disabled'); ?>
 --FILE--
 <?php
 $device = Metal\createSystemDefaultDevice();

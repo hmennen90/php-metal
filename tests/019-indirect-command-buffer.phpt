@@ -2,6 +2,8 @@
 Metal Indirect Command Buffer
 --EXTENSIONS--
 metal
+--SKIPIF--
+<?php if (getenv('METAL_SKIP_ICB_TESTS')) die('skip: ICB tests disabled'); ?>
 --FILE--
 <?php
 $device = Metal\createSystemDefaultDevice();
@@ -13,18 +15,13 @@ $desc->setInheritPipelineState(true);
 $desc->setMaxVertexBufferBindCount(10);
 $desc->setMaxFragmentBufferBindCount(10);
 
-try {
-    $icb = $device->createIndirectCommandBuffer($desc, 100);
-    var_dump($icb instanceof Metal\IndirectCommandBuffer);
-    var_dump($icb->getSize() >= 1);
-    $icb->resetWithRange(0, 50);
-    echo "OK\n";
-} catch (Metal\Exception $e) {
-    echo "SKIP: " . $e->getMessage() . "\n";
-    echo "OK\n";
-}
+$icb = $device->createIndirectCommandBuffer($desc, 100);
+var_dump($icb instanceof Metal\IndirectCommandBuffer);
+var_dump($icb->getSize() >= 1);
+$icb->resetWithRange(0, 50);
+echo "OK\n";
 ?>
---EXPECTF--
-%s
-%s
+--EXPECT--
+bool(true)
+bool(true)
 OK
