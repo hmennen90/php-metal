@@ -71,6 +71,7 @@ extern zend_class_entry *metal_ce_accel_encoder;
 extern zend_class_entry *metal_ce_indirect_render_command;
 extern zend_class_entry *metal_ce_indirect_compute_command;
 extern zend_class_entry *metal_ce_mesh_render_pipeline_descriptor;
+extern zend_class_entry *metal_ce_stencil_descriptor;
 
 /* ------------------------------------------------------------------ */
 /*  PHP version compatibility                                          */

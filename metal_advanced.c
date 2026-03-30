@@ -1182,3 +1182,143 @@ void metal_register_mesh_shader_classes(void)
 {
     METAL_REGISTER_CLASS(mesh_render_pipeline_descriptor, "MeshRenderPipelineDescriptor", metal_mesh_render_pipeline_descriptor_methods, metal_mesh_render_pipeline_descriptor_handlers, metal_ce_mesh_render_pipeline_descriptor, ZEND_ACC_NO_DYNAMIC_PROPERTIES);
 }
+
+/* ######################################################################
+ *  SECTION 12: StencilDescriptor
+ * ###################################################################### */
+
+static zend_object_handlers metal_stencil_descriptor_handlers;
+METAL_DEFINE_CREATE_FREE(stencil_descriptor, metal_stencil_descriptor_t, descriptor, metal_ce_stencil_descriptor, &metal_stencil_descriptor_handlers)
+
+PHP_METHOD(Metal_StencilDescriptor, __construct)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    metal_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor = [[MTLStencilDescriptor alloc] init];
+}
+
+PHP_METHOD(Metal_StencilDescriptor, setStencilCompareFunction)
+{
+    zend_long fn;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(fn) ZEND_PARSE_PARAMETERS_END();
+    metal_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.stencilCompareFunction = (MTLCompareFunction)fn;
+}
+
+PHP_METHOD(Metal_StencilDescriptor, setStencilFailureOperation)
+{
+    zend_long op;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(op) ZEND_PARSE_PARAMETERS_END();
+    metal_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.stencilFailureOperation = (MTLStencilOperation)op;
+}
+
+PHP_METHOD(Metal_StencilDescriptor, setDepthFailureOperation)
+{
+    zend_long op;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(op) ZEND_PARSE_PARAMETERS_END();
+    metal_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.depthFailureOperation = (MTLStencilOperation)op;
+}
+
+PHP_METHOD(Metal_StencilDescriptor, setDepthStencilPassOperation)
+{
+    zend_long op;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(op) ZEND_PARSE_PARAMETERS_END();
+    metal_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.depthStencilPassOperation = (MTLStencilOperation)op;
+}
+
+PHP_METHOD(Metal_StencilDescriptor, setReadMask)
+{
+    zend_long mask;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(mask) ZEND_PARSE_PARAMETERS_END();
+    metal_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.readMask = (uint32_t)mask;
+}
+
+PHP_METHOD(Metal_StencilDescriptor, setWriteMask)
+{
+    zend_long mask;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(mask) ZEND_PARSE_PARAMETERS_END();
+    metal_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.writeMask = (uint32_t)mask;
+}
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_sd_construct, 0, 0, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_sd_set_long, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, v, IS_LONG, 0) ZEND_END_ARG_INFO()
+
+static const zend_function_entry metal_stencil_descriptor_methods[] = {
+    PHP_ME(Metal_StencilDescriptor, __construct,                arginfo_sd_construct, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_StencilDescriptor, setStencilCompareFunction,  arginfo_sd_set_long,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_StencilDescriptor, setStencilFailureOperation, arginfo_sd_set_long,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_StencilDescriptor, setDepthFailureOperation,   arginfo_sd_set_long,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_StencilDescriptor, setDepthStencilPassOperation,arginfo_sd_set_long, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_StencilDescriptor, setReadMask,                arginfo_sd_set_long,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_StencilDescriptor, setWriteMask,               arginfo_sd_set_long,  ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+void metal_register_stencil_descriptor_class(void)
+{
+    METAL_REGISTER_CLASS(stencil_descriptor, "StencilDescriptor", metal_stencil_descriptor_methods, metal_stencil_descriptor_handlers, metal_ce_stencil_descriptor, ZEND_ACC_NO_DYNAMIC_PROPERTIES);
+}
+
+/* ######################################################################
+ *  SECTION 13: Final constants (stencil ops, tessellation, blend ops, etc.)
+ * ###################################################################### */
+
+void metal_register_final_constants(int module_number)
+{
+    /* Stencil operations */
+    REGISTER_NS_LONG_CONSTANT("Metal", "StencilOperationKeep",           MTLStencilOperationKeep,           CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "StencilOperationZero",           MTLStencilOperationZero,           CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "StencilOperationReplace",        MTLStencilOperationReplace,        CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "StencilOperationIncrementClamp", MTLStencilOperationIncrementClamp, CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "StencilOperationDecrementClamp", MTLStencilOperationDecrementClamp, CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "StencilOperationInvert",         MTLStencilOperationInvert,         CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "StencilOperationIncrementWrap",  MTLStencilOperationIncrementWrap,  CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "StencilOperationDecrementWrap",  MTLStencilOperationDecrementWrap,  CONST_CS | CONST_PERSISTENT);
+
+    /* Blend operations */
+    REGISTER_NS_LONG_CONSTANT("Metal", "BlendOperationAdd",             MTLBlendOperationAdd,             CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "BlendOperationSubtract",        MTLBlendOperationSubtract,        CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "BlendOperationReverseSubtract", MTLBlendOperationReverseSubtract, CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "BlendOperationMin",             MTLBlendOperationMin,             CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "BlendOperationMax",             MTLBlendOperationMax,             CONST_CS | CONST_PERSISTENT);
+
+    /* Color write mask */
+    REGISTER_NS_LONG_CONSTANT("Metal", "ColorWriteMaskNone",  MTLColorWriteMaskNone,  CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "ColorWriteMaskRed",   MTLColorWriteMaskRed,   CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "ColorWriteMaskGreen", MTLColorWriteMaskGreen, CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "ColorWriteMaskBlue",  MTLColorWriteMaskBlue,  CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "ColorWriteMaskAlpha", MTLColorWriteMaskAlpha, CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "ColorWriteMaskAll",   MTLColorWriteMaskAll,   CONST_CS | CONST_PERSISTENT);
+
+    /* Tessellation partition mode */
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationPartitionModePow2",           MTLTessellationPartitionModePow2,           CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationPartitionModeInteger",        MTLTessellationPartitionModeInteger,        CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationPartitionModeFractionalOdd",  MTLTessellationPartitionModeFractionalOdd,  CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationPartitionModeFractionalEven", MTLTessellationPartitionModeFractionalEven, CONST_CS | CONST_PERSISTENT);
+
+    /* Tessellation factor format */
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationFactorFormatHalf", MTLTessellationFactorFormatHalf, CONST_CS | CONST_PERSISTENT);
+
+    /* Tessellation control point index type */
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationControlPointIndexTypeNone",   MTLTessellationControlPointIndexTypeNone,   CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationControlPointIndexTypeUInt16", MTLTessellationControlPointIndexTypeUInt16, CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationControlPointIndexTypeUInt32", MTLTessellationControlPointIndexTypeUInt32, CONST_CS | CONST_PERSISTENT);
+
+    /* Tessellation factor step function */
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationFactorStepFunctionConstant",            MTLTessellationFactorStepFunctionConstant,            CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationFactorStepFunctionPerPatch",            MTLTessellationFactorStepFunctionPerPatch,            CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationFactorStepFunctionPerInstance",         MTLTessellationFactorStepFunctionPerInstance,         CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "TessellationFactorStepFunctionPerPatchAndPerInstance", MTLTessellationFactorStepFunctionPerPatchAndPerInstance, CONST_CS | CONST_PERSISTENT);
+
+    /* Store action: multisample resolve */
+    REGISTER_NS_LONG_CONSTANT("Metal", "StoreActionMultisampleResolve", MTLStoreActionMultisampleResolve, CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "StoreActionStoreAndMultisampleResolve", MTLStoreActionStoreAndMultisampleResolve, CONST_CS | CONST_PERSISTENT);
+
+    /* Pixel format: stencil */
+    REGISTER_NS_LONG_CONSTANT("Metal", "PixelFormatStencil8",            MTLPixelFormatStencil8,            CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "PixelFormatDepth32Float_Stencil8", MTLPixelFormatDepth32Float_Stencil8, CONST_CS | CONST_PERSISTENT);
+
+    /* Primitive topology class (for tessellation input) */
+    REGISTER_NS_LONG_CONSTANT("Metal", "PrimitiveTopologyClassUnspecified", MTLPrimitiveTopologyClassUnspecified, CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "PrimitiveTopologyClassPoint",      MTLPrimitiveTopologyClassPoint,      CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "PrimitiveTopologyClassLine",       MTLPrimitiveTopologyClassLine,       CONST_CS | CONST_PERSISTENT);
+    REGISTER_NS_LONG_CONSTANT("Metal", "PrimitiveTopologyClassTriangle",   MTLPrimitiveTopologyClassTriangle,   CONST_CS | CONST_PERSISTENT);
+}

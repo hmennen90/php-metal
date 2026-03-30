@@ -65,6 +65,7 @@ zend_class_entry *metal_ce_accel_encoder;
 zend_class_entry *metal_ce_indirect_render_command;
 zend_class_entry *metal_ce_indirect_compute_command;
 zend_class_entry *metal_ce_mesh_render_pipeline_descriptor;
+zend_class_entry *metal_ce_stencil_descriptor;
 
 /* ====================================================================
  *  Object handler tables
@@ -941,6 +942,17 @@ PHP_METHOD(Metal_Buffer, getGpuAddress)
     RETURN_LONG((zend_long)[intern->buffer gpuAddress]);
 }
 
+PHP_METHOD(Metal_Buffer, newTextureFromBuffer)
+{
+    zval *zdesc; zend_long offset, bytes_per_row;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zdesc, metal_ce_texture_descriptor) Z_PARAM_LONG(offset) Z_PARAM_LONG(bytes_per_row) ZEND_PARSE_PARAMETERS_END();
+    metal_buffer_t *intern = metal_buffer_from_obj(Z_OBJ_P(ZEND_THIS));
+    metal_texture_descriptor_t *desc = metal_texture_descriptor_from_obj(Z_OBJ_P(zdesc));
+    id<MTLTexture> tex = [intern->buffer newTextureWithDescriptor:desc->descriptor offset:(NSUInteger)offset bytesPerRow:(NSUInteger)bytes_per_row];
+    if (!tex) { zend_throw_exception(metal_ce_exception, "Failed to create texture from buffer", 0); RETURN_THROWS(); }
+    METAL_WRAP_RETURN(texture, metal_texture_t, texture, metal_ce_texture, tex);
+}
+
 /* }}} */
 
 /* ====================================================================
@@ -1337,6 +1349,33 @@ PHP_METHOD(Metal_ComputeCommandEncoder, setAccelerationStructure)
     [metal_compute_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder setAccelerationStructure:metal_acceleration_structure_from_obj(Z_OBJ_P(zas))->accel atBufferIndex:(NSUInteger)index];
 }
 
+PHP_METHOD(Metal_ComputeCommandEncoder, executeCommandsInBuffer)
+{
+    zval *zicb; zend_long offset, count;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zicb, metal_ce_indirect_command_buffer) Z_PARAM_LONG(offset) Z_PARAM_LONG(count) ZEND_PARSE_PARAMETERS_END();
+    [metal_compute_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder executeCommandsInBuffer:metal_indirect_command_buffer_from_obj(Z_OBJ_P(zicb))->buffer withRange:NSMakeRange((NSUInteger)offset, (NSUInteger)count)];
+}
+
+PHP_METHOD(Metal_ComputeCommandEncoder, executeCommandsInBufferIndirect)
+{
+    zval *zicb, *zbuf; zend_long offset;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zicb, metal_ce_indirect_command_buffer) Z_PARAM_OBJECT_OF_CLASS(zbuf, metal_ce_buffer) Z_PARAM_LONG(offset) ZEND_PARSE_PARAMETERS_END();
+    [metal_compute_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder executeCommandsInBuffer:metal_indirect_command_buffer_from_obj(Z_OBJ_P(zicb))->buffer indirectBuffer:metal_buffer_from_obj(Z_OBJ_P(zbuf))->buffer indirectBufferOffset:(NSUInteger)offset];
+}
+
+PHP_METHOD(Metal_ComputeCommandEncoder, pushDebugGroup)
+{
+    zend_string *label;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_STR(label) ZEND_PARSE_PARAMETERS_END();
+    [metal_compute_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder pushDebugGroup:[NSString stringWithUTF8String:ZSTR_VAL(label)]];
+}
+
+PHP_METHOD(Metal_ComputeCommandEncoder, popDebugGroup)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    [metal_compute_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder popDebugGroup];
+}
+
 /* }}} */
 
 /* ====================================================================
@@ -1698,6 +1737,91 @@ PHP_METHOD(Metal_RenderCommandEncoder, useResource)
     zval *zres; zend_long usage, stages;
     ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zres, metal_ce_buffer) Z_PARAM_LONG(usage) Z_PARAM_LONG(stages) ZEND_PARSE_PARAMETERS_END();
     [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder useResource:metal_buffer_from_obj(Z_OBJ_P(zres))->buffer usage:(MTLResourceUsage)usage stages:(MTLRenderStages)stages];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, setTessellationFactorBuffer)
+{
+    zval *zbuf; zend_long offset, instance_stride;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zbuf, metal_ce_buffer) Z_PARAM_LONG(offset) Z_PARAM_LONG(instance_stride) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder setTessellationFactorBuffer:metal_buffer_from_obj(Z_OBJ_P(zbuf))->buffer offset:(NSUInteger)offset instanceStride:(NSUInteger)instance_stride];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, setTessellationFactorScale)
+{
+    double scale;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_DOUBLE(scale) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder setTessellationFactorScale:(float)scale];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, executeCommandsInBuffer)
+{
+    zval *zicb; zend_long offset, count;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zicb, metal_ce_indirect_command_buffer) Z_PARAM_LONG(offset) Z_PARAM_LONG(count) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder executeCommandsInBuffer:metal_indirect_command_buffer_from_obj(Z_OBJ_P(zicb))->buffer withRange:NSMakeRange((NSUInteger)offset, (NSUInteger)count)];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, executeCommandsInBufferIndirect)
+{
+    zval *zicb, *zbuf; zend_long offset;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zicb, metal_ce_indirect_command_buffer) Z_PARAM_OBJECT_OF_CLASS(zbuf, metal_ce_buffer) Z_PARAM_LONG(offset) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder executeCommandsInBuffer:metal_indirect_command_buffer_from_obj(Z_OBJ_P(zicb))->buffer indirectBuffer:metal_buffer_from_obj(Z_OBJ_P(zbuf))->buffer indirectBufferOffset:(NSUInteger)offset];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, drawMeshThreadgroups)
+{
+    zval *tg_arr, *tptg_arr, *tpto_arr;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_ARRAY(tg_arr) Z_PARAM_ARRAY(tptg_arr) Z_PARAM_ARRAY(tpto_arr) ZEND_PARSE_PARAMETERS_END();
+    MTLSize tg = metal_parse_size(tg_arr); MTLSize tptg = metal_parse_size(tptg_arr); MTLSize tpto = metal_parse_size(tpto_arr);
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder drawMeshThreadgroups:tg threadsPerObjectThreadgroup:tpto threadsPerMeshThreadgroup:tptg];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, drawMeshThreads)
+{
+    zval *threads_arr, *tptg_arr, *tpto_arr;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_ARRAY(threads_arr) Z_PARAM_ARRAY(tptg_arr) Z_PARAM_ARRAY(tpto_arr) ZEND_PARSE_PARAMETERS_END();
+    MTLSize threads = metal_parse_size(threads_arr); MTLSize tptg = metal_parse_size(tptg_arr); MTLSize tpto = metal_parse_size(tpto_arr);
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder drawMeshThreads:threads threadsPerObjectThreadgroup:tpto threadsPerMeshThreadgroup:tptg];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, setObjectBuffer)
+{
+    zval *zbuf; zend_long offset, index;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zbuf, metal_ce_buffer) Z_PARAM_LONG(offset) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder setObjectBuffer:metal_buffer_from_obj(Z_OBJ_P(zbuf))->buffer offset:(NSUInteger)offset atIndex:(NSUInteger)index];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, setObjectBytes)
+{
+    zend_string *data; zend_long index;
+    ZEND_PARSE_PARAMETERS_START(2, 2) Z_PARAM_STR(data) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder setObjectBytes:ZSTR_VAL(data) length:ZSTR_LEN(data) atIndex:(NSUInteger)index];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, setMeshBuffer)
+{
+    zval *zbuf; zend_long offset, index;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zbuf, metal_ce_buffer) Z_PARAM_LONG(offset) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder setMeshBuffer:metal_buffer_from_obj(Z_OBJ_P(zbuf))->buffer offset:(NSUInteger)offset atIndex:(NSUInteger)index];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, setMeshBytes)
+{
+    zend_string *data; zend_long index;
+    ZEND_PARSE_PARAMETERS_START(2, 2) Z_PARAM_STR(data) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder setMeshBytes:ZSTR_VAL(data) length:ZSTR_LEN(data) atIndex:(NSUInteger)index];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, pushDebugGroup)
+{
+    zend_string *label;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_STR(label) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder pushDebugGroup:[NSString stringWithUTF8String:ZSTR_VAL(label)]];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, popDebugGroup)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder popDebugGroup];
 }
 
 /* }}} */
@@ -2248,6 +2372,93 @@ PHP_METHOD(Metal_RenderPipelineDescriptor, setVertexDescriptor)
     metal_vertex_descriptor_t *vd = metal_vertex_descriptor_from_obj(Z_OBJ_P(zdescriptor));
     intern->descriptor.vertexDescriptor = vd->descriptor;
 }
+
+/* {{{ RenderPipelineDescriptor — tessellation + advanced properties */
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setTessellationPartitionMode)
+{
+    zend_long mode; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(mode) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.tessellationPartitionMode = (MTLTessellationPartitionMode)mode;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setMaxTessellationFactor)
+{
+    zend_long factor; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(factor) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.maxTessellationFactor = (NSUInteger)factor;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setTessellationFactorScaleEnabled)
+{
+    bool enabled; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_BOOL(enabled) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.tessellationFactorScaleEnabled = enabled;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setTessellationFactorFormat)
+{
+    zend_long fmt; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(fmt) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.tessellationFactorFormat = (MTLTessellationFactorFormat)fmt;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setTessellationControlPointIndexType)
+{
+    zend_long type; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(type) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.tessellationControlPointIndexType = (MTLTessellationControlPointIndexType)type;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setTessellationFactorStepFunction)
+{
+    zend_long fn; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(fn) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.tessellationFactorStepFunction = (MTLTessellationFactorStepFunction)fn;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setTessellationOutputWindingOrder)
+{
+    zend_long winding; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(winding) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.tessellationOutputWindingOrder = (MTLWinding)winding;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setStencilAttachmentPixelFormat)
+{
+    zend_long fmt; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(fmt) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.stencilAttachmentPixelFormat = (MTLPixelFormat)fmt;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setInputPrimitiveTopology)
+{
+    zend_long topo; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(topo) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.inputPrimitiveTopology = (MTLPrimitiveTopologyClass)topo;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setSupportIndirectCommandBuffers)
+{
+    bool val; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_BOOL(val) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.supportIndirectCommandBuffers = val;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setRasterSampleCount)
+{
+    zend_long count; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(count) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.rasterSampleCount = (NSUInteger)count;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setAlphaToCoverageEnabled)
+{
+    bool val; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_BOOL(val) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.alphaToCoverageEnabled = val;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setAlphaToOneEnabled)
+{
+    bool val; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_BOOL(val) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.alphaToOneEnabled = val;
+}
+
+PHP_METHOD(Metal_RenderPipelineDescriptor, setRasterizationEnabled)
+{
+    bool val; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_BOOL(val) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.rasterizationEnabled = val;
+}
+
 /* }}} */
 
 /* ====================================================================
@@ -2313,6 +2524,24 @@ PHP_METHOD(Metal_ColorAttachmentDescriptor, setDestinationAlphaBlendFactor)
     ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(factor) ZEND_PARSE_PARAMETERS_END();
     metal_color_attachment_descriptor_t *intern = metal_color_attachment_descriptor_from_obj(Z_OBJ_P(ZEND_THIS));
     intern->descriptor.destinationAlphaBlendFactor = (MTLBlendFactor)factor;
+}
+
+PHP_METHOD(Metal_ColorAttachmentDescriptor, setRgbBlendOperation)
+{
+    zend_long op; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(op) ZEND_PARSE_PARAMETERS_END();
+    metal_color_attachment_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.rgbBlendOperation = (MTLBlendOperation)op;
+}
+
+PHP_METHOD(Metal_ColorAttachmentDescriptor, setAlphaBlendOperation)
+{
+    zend_long op; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(op) ZEND_PARSE_PARAMETERS_END();
+    metal_color_attachment_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.alphaBlendOperation = (MTLBlendOperation)op;
+}
+
+PHP_METHOD(Metal_ColorAttachmentDescriptor, setWriteMask)
+{
+    zend_long mask; ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(mask) ZEND_PARSE_PARAMETERS_END();
+    metal_color_attachment_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.writeMask = (MTLColorWriteMask)mask;
 }
 /* }}} */
 
@@ -2433,6 +2662,51 @@ PHP_METHOD(Metal_RenderPassDescriptor, setDepthAttachmentClearDepth)
     metal_render_pass_descriptor_t *intern = metal_render_pass_descriptor_from_obj(Z_OBJ_P(ZEND_THIS));
     intern->descriptor.depthAttachment.clearDepth = depth;
 }
+
+/* {{{ RenderPassDescriptor — stencil attachment + MSAA resolve */
+
+PHP_METHOD(Metal_RenderPassDescriptor, setStencilAttachmentTexture)
+{
+    zval *ztex;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(ztex, metal_ce_texture) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pass_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.stencilAttachment.texture = metal_texture_from_obj(Z_OBJ_P(ztex))->texture;
+}
+
+PHP_METHOD(Metal_RenderPassDescriptor, setStencilAttachmentLoadAction)
+{
+    zend_long action;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(action) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pass_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.stencilAttachment.loadAction = (MTLLoadAction)action;
+}
+
+PHP_METHOD(Metal_RenderPassDescriptor, setStencilAttachmentStoreAction)
+{
+    zend_long action;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(action) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pass_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.stencilAttachment.storeAction = (MTLStoreAction)action;
+}
+
+PHP_METHOD(Metal_RenderPassDescriptor, setStencilAttachmentClearStencil)
+{
+    zend_long value;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(value) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pass_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.stencilAttachment.clearStencil = (uint32_t)value;
+}
+
+PHP_METHOD(Metal_RenderPassDescriptor, setColorAttachmentResolveTexture)
+{
+    zend_long index; zval *ztex;
+    ZEND_PARSE_PARAMETERS_START(2, 2) Z_PARAM_LONG(index) Z_PARAM_OBJECT_OF_CLASS(ztex, metal_ce_texture) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pass_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.colorAttachments[index].resolveTexture = metal_texture_from_obj(Z_OBJ_P(ztex))->texture;
+}
+
+PHP_METHOD(Metal_RenderPassDescriptor, setDepthAttachmentResolveTexture)
+{
+    zval *ztex;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(ztex, metal_ce_texture) ZEND_PARSE_PARAMETERS_END();
+    metal_render_pass_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.depthAttachment.resolveTexture = metal_texture_from_obj(Z_OBJ_P(ztex))->texture;
+}
+
 /* }}} */
 
 /* ====================================================================
@@ -2465,6 +2739,20 @@ PHP_METHOD(Metal_DepthStencilDescriptor, setDepthWriteEnabled)
     ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_BOOL(enabled) ZEND_PARSE_PARAMETERS_END();
     metal_depth_stencil_descriptor_t *intern = metal_depth_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS));
     intern->descriptor.depthWriteEnabled = enabled;
+}
+
+PHP_METHOD(Metal_DepthStencilDescriptor, setFrontFaceStencil)
+{
+    zval *zsd;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zsd, metal_ce_stencil_descriptor) ZEND_PARSE_PARAMETERS_END();
+    metal_depth_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.frontFaceStencil = metal_stencil_descriptor_from_obj(Z_OBJ_P(zsd))->descriptor;
+}
+
+PHP_METHOD(Metal_DepthStencilDescriptor, setBackFaceStencil)
+{
+    zval *zsd;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zsd, metal_ce_stencil_descriptor) ZEND_PARSE_PARAMETERS_END();
+    metal_depth_stencil_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.backFaceStencil = metal_stencil_descriptor_from_obj(Z_OBJ_P(zsd))->descriptor;
 }
 /* }}} */
 
@@ -2959,6 +3247,22 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_dev_heapTexSize, 0, 1, IS_ARRAY,
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_dev_createMeshPSO, 0, 1, Metal\\RenderPipelineState, 0) ZEND_ARG_OBJ_INFO(0, d, Metal\\MeshRenderPipelineDescriptor, 0) ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_cmdbuf_createASEncoder, 0, 0, Metal\\AccelerationStructureCommandEncoder, 0) ZEND_END_ARG_INFO()
 
+/* Stencil support arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_dsd_setStencil, 0, 1, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, d, Metal\\StencilDescriptor, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_rpd_setStencilTex, 0, 1, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, tex, Metal\\Texture, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_rpd_setColorResolve, 0, 2, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0) ZEND_ARG_OBJ_INFO(0, tex, Metal\\Texture, 0) ZEND_END_ARG_INFO()
+
+/* Tessellation/ICB execution on render encoder */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_re_setTessFactorBuf, 0, 3, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, buf, Metal\\Buffer, 0) ZEND_ARG_TYPE_INFO(0, offset, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, instanceStride, IS_LONG, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_re_setTessScale, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, scale, IS_DOUBLE, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_re_execICB, 0, 3, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, icb, Metal\\IndirectCommandBuffer, 0) ZEND_ARG_TYPE_INFO(0, offset, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, count, IS_LONG, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_re_execICBIndirect, 0, 3, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, icb, Metal\\IndirectCommandBuffer, 0) ZEND_ARG_OBJ_INFO(0, buf, Metal\\Buffer, 0) ZEND_ARG_TYPE_INFO(0, offset, IS_LONG, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_re_drawMesh, 0, 3, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, a, IS_ARRAY, 0) ZEND_ARG_TYPE_INFO(0, b, IS_ARRAY, 0) ZEND_ARG_TYPE_INFO(0, c, IS_ARRAY, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_re_debugStr, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, label, IS_STRING, 0) ZEND_END_ARG_INFO()
+
+/* Buffer texture */
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_buf_newTex, 0, 3, Metal\\Texture, 0) ZEND_ARG_OBJ_INFO(0, desc, Metal\\TextureDescriptor, 0) ZEND_ARG_TYPE_INFO(0, offset, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, bytesPerRow, IS_LONG, 0) ZEND_END_ARG_INFO()
+
 /* Buffer enhanced */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_buf_didModify, 0, 2, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, offset, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, length, IS_LONG, 0) ZEND_END_ARG_INFO()
 
@@ -3040,7 +3344,8 @@ static const zend_function_entry metal_buffer_methods[] = {
     PHP_ME(Metal_Buffer, getRawContents,   arginfo_Metal_Buffer_getRawContents,   ZEND_ACC_PUBLIC)
     PHP_ME(Metal_Buffer, writeRawContents, arginfo_Metal_Buffer_writeRawContents, ZEND_ACC_PUBLIC)
     PHP_ME(Metal_Buffer, didModifyRange,  arginfo_buf_didModify,                ZEND_ACC_PUBLIC)
-    PHP_ME(Metal_Buffer, getGpuAddress,   arginfo_adv_long,                     ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_Buffer, getGpuAddress,        arginfo_adv_long,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_Buffer, newTextureFromBuffer, arginfo_buf_newTex, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3080,7 +3385,11 @@ static const zend_function_entry metal_compute_encoder_methods[] = {
     PHP_ME(Metal_ComputeCommandEncoder, memoryBarrierWithScope,   arginfo_adv_void_1long,  ZEND_ACC_PUBLIC)
     PHP_ME(Metal_ComputeCommandEncoder, updateFence,              arginfo_ce_fence,        ZEND_ACC_PUBLIC)
     PHP_ME(Metal_ComputeCommandEncoder, waitForFence,             arginfo_ce_fence,        ZEND_ACC_PUBLIC)
-    PHP_ME(Metal_ComputeCommandEncoder, setAccelerationStructure, arginfo_ce_setAS,        ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputeCommandEncoder, setAccelerationStructure,      arginfo_ce_setAS,          ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputeCommandEncoder, executeCommandsInBuffer,      arginfo_re_execICB,        ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputeCommandEncoder, executeCommandsInBufferIndirect, arginfo_re_execICBIndirect, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputeCommandEncoder, pushDebugGroup,               arginfo_re_debugStr,       ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputeCommandEncoder, popDebugGroup,                arginfo_adv_void,          ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3113,6 +3422,18 @@ static const zend_function_entry metal_render_encoder_methods[] = {
     PHP_ME(Metal_RenderCommandEncoder, updateFence,                       arginfo_re_fence,                     ZEND_ACC_PUBLIC)
     PHP_ME(Metal_RenderCommandEncoder, waitForFence,                      arginfo_re_fence,                     ZEND_ACC_PUBLIC)
     PHP_ME(Metal_RenderCommandEncoder, useResource,                       arginfo_re_useResource,               ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, setTessellationFactorBuffer,      arginfo_re_setTessFactorBuf,          ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, setTessellationFactorScale,       arginfo_re_setTessScale,              ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, executeCommandsInBuffer,          arginfo_re_execICB,                   ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, executeCommandsInBufferIndirect,  arginfo_re_execICBIndirect,           ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, drawMeshThreadgroups,             arginfo_re_drawMesh,                  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, drawMeshThreads,                  arginfo_re_drawMesh,                  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, setObjectBuffer,                  arginfo_Metal_RenderCommandEncoder_setVertexBuffer, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, setObjectBytes,                   arginfo_Metal_ComputeCommandEncoder_setBytes, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, setMeshBuffer,                    arginfo_Metal_RenderCommandEncoder_setVertexBuffer, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, setMeshBytes,                     arginfo_Metal_ComputeCommandEncoder_setBytes, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, pushDebugGroup,                   arginfo_re_debugStr,                  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, popDebugGroup,                    arginfo_adv_void,                     ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3186,7 +3507,23 @@ static const zend_function_entry metal_render_pipeline_descriptor_methods[] = {
     PHP_ME(Metal_RenderPipelineDescriptor, setFragmentFunction,         arginfo_Metal_RenderPipelineDescriptor_setFunction,             ZEND_ACC_PUBLIC)
     PHP_ME(Metal_RenderPipelineDescriptor, getColorAttachment,          arginfo_Metal_RenderPipelineDescriptor_getColorAttachment,      ZEND_ACC_PUBLIC)
     PHP_ME(Metal_RenderPipelineDescriptor, setDepthAttachmentPixelFormat, arginfo_Metal_setLong,                                       ZEND_ACC_PUBLIC)
-    PHP_ME(Metal_RenderPipelineDescriptor, setVertexDescriptor,         arginfo_Metal_RenderPipelineDescriptor_setVertexDescriptor,     ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setVertexDescriptor,                   arginfo_Metal_RenderPipelineDescriptor_setVertexDescriptor, ZEND_ACC_PUBLIC)
+    /* Tessellation */
+    PHP_ME(Metal_RenderPipelineDescriptor, setTessellationPartitionMode,         arginfo_Metal_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setMaxTessellationFactor,             arginfo_Metal_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setTessellationFactorScaleEnabled,    arginfo_Metal_setBool, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setTessellationFactorFormat,          arginfo_Metal_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setTessellationControlPointIndexType, arginfo_Metal_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setTessellationFactorStepFunction,    arginfo_Metal_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setTessellationOutputWindingOrder,    arginfo_Metal_setLong, ZEND_ACC_PUBLIC)
+    /* Advanced properties */
+    PHP_ME(Metal_RenderPipelineDescriptor, setStencilAttachmentPixelFormat,      arginfo_Metal_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setInputPrimitiveTopology,            arginfo_Metal_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setSupportIndirectCommandBuffers,     arginfo_Metal_setBool, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setRasterSampleCount,                 arginfo_Metal_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setAlphaToCoverageEnabled,            arginfo_Metal_setBool, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setAlphaToOneEnabled,                 arginfo_Metal_setBool, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPipelineDescriptor, setRasterizationEnabled,              arginfo_Metal_setBool, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3199,7 +3536,13 @@ static const zend_function_entry metal_render_pass_descriptor_methods[] = {
     PHP_ME(Metal_RenderPassDescriptor, setDepthAttachmentTexture,      arginfo_Metal_RenderPassDescriptor_setDepthAttachmentTexture,      ZEND_ACC_PUBLIC)
     PHP_ME(Metal_RenderPassDescriptor, setDepthAttachmentLoadAction,   arginfo_Metal_setLong,                                            ZEND_ACC_PUBLIC)
     PHP_ME(Metal_RenderPassDescriptor, setDepthAttachmentStoreAction,  arginfo_Metal_setLong,                                            ZEND_ACC_PUBLIC)
-    PHP_ME(Metal_RenderPassDescriptor, setDepthAttachmentClearDepth,   arginfo_Metal_setBool,                                            ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPassDescriptor, setDepthAttachmentClearDepth,          arginfo_Metal_setBool,         ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPassDescriptor, setStencilAttachmentTexture,         arginfo_rpd_setStencilTex,     ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPassDescriptor, setStencilAttachmentLoadAction,      arginfo_Metal_setLong,         ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPassDescriptor, setStencilAttachmentStoreAction,     arginfo_Metal_setLong,         ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPassDescriptor, setStencilAttachmentClearStencil,    arginfo_Metal_setLong,         ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPassDescriptor, setColorAttachmentResolveTexture,    arginfo_rpd_setColorResolve,   ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderPassDescriptor, setDepthAttachmentResolveTexture,    arginfo_rpd_setStencilTex,     ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3210,6 +3553,9 @@ static const zend_function_entry metal_color_attachment_descriptor_methods[] = {
     PHP_ME(Metal_ColorAttachmentDescriptor, setDestinationRGBBlendFactor,  arginfo_Metal_setLong,  ZEND_ACC_PUBLIC)
     PHP_ME(Metal_ColorAttachmentDescriptor, setSourceAlphaBlendFactor,     arginfo_Metal_setLong,  ZEND_ACC_PUBLIC)
     PHP_ME(Metal_ColorAttachmentDescriptor, setDestinationAlphaBlendFactor,arginfo_Metal_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ColorAttachmentDescriptor, setRgbBlendOperation,        arginfo_Metal_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ColorAttachmentDescriptor, setAlphaBlendOperation,      arginfo_Metal_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ColorAttachmentDescriptor, setWriteMask,                arginfo_Metal_setLong,  ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3217,6 +3563,8 @@ static const zend_function_entry metal_depth_stencil_descriptor_methods[] = {
     PHP_ME(Metal_DepthStencilDescriptor, __construct,            arginfo_Metal_DepthStencilDescriptor___construct, ZEND_ACC_PUBLIC)
     PHP_ME(Metal_DepthStencilDescriptor, setDepthCompareFunction,arginfo_Metal_setLong,                           ZEND_ACC_PUBLIC)
     PHP_ME(Metal_DepthStencilDescriptor, setDepthWriteEnabled,   arginfo_Metal_setBool,                           ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_DepthStencilDescriptor, setFrontFaceStencil,  arginfo_dsd_setStencil,                          ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_DepthStencilDescriptor, setBackFaceStencil,   arginfo_dsd_setStencil,                          ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3460,7 +3808,9 @@ PHP_MINIT_FUNCTION(metal)
     metal_register_accel_encoder_class();
     metal_register_indirect_command_classes();
     metal_register_mesh_shader_classes();
+    metal_register_stencil_descriptor_class();
     metal_register_advanced_constants(module_number);
+    metal_register_final_constants(module_number);
 
     return SUCCESS;
 }

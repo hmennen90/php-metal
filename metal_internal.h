@@ -137,6 +137,7 @@ typedef struct { id<MTLAccelerationStructureCommandEncoder> encoder;           z
 typedef struct { id<MTLIndirectRenderCommand> command;                         zend_object std; } metal_indirect_render_command_t;
 typedef struct { id<MTLIndirectComputeCommand> command;                        zend_object std; } metal_indirect_compute_command_t;
 typedef struct { MTLMeshRenderPipelineDescriptor *descriptor;                  zend_object std; } metal_mesh_render_pipeline_descriptor_t;
+typedef struct { MTLStencilDescriptor *descriptor;                             zend_object std; } metal_stencil_descriptor_t;
 
 /* ====================================================================
  *  Core from_obj inline accessors
@@ -188,6 +189,7 @@ static inline metal_accel_encoder_t *metal_accel_encoder_from_obj(zend_object *o
 static inline metal_indirect_render_command_t *metal_indirect_render_command_from_obj(zend_object *o) { return METAL_OBJ(metal_indirect_render_command_t, o); }
 static inline metal_indirect_compute_command_t *metal_indirect_compute_command_from_obj(zend_object *o) { return METAL_OBJ(metal_indirect_compute_command_t, o); }
 static inline metal_mesh_render_pipeline_descriptor_t *metal_mesh_render_pipeline_descriptor_from_obj(zend_object *o) { return METAL_OBJ(metal_mesh_render_pipeline_descriptor_t, o); }
+static inline metal_stencil_descriptor_t *metal_stencil_descriptor_from_obj(zend_object *o) { return METAL_OBJ(metal_stencil_descriptor_t, o); }
 
 /* ====================================================================
  *  Helper: read MTLSize from a PHP array [w, h, d]
@@ -219,5 +221,7 @@ void metal_register_advanced_constants(int module_number);
 void metal_register_accel_encoder_class(void);
 void metal_register_indirect_command_classes(void);
 void metal_register_mesh_shader_classes(void);
+void metal_register_stencil_descriptor_class(void);
+void metal_register_final_constants(int module_number);
 
 #endif /* METAL_INTERNAL_H */
