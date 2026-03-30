@@ -614,7 +614,14 @@ PHP_METHOD(Metal_Device, createLibraryWithSource)
         zval *val;
 
         if ((val = zend_hash_str_find(ht, "fastMathEnabled", sizeof("fastMathEnabled") - 1)) != NULL) {
+#if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
             opts.mathMode = zend_is_true(val) ? MTLMathModeFast : MTLMathModeSafe;
+#else
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            opts.fastMathEnabled = zend_is_true(val);
+            #pragma clang diagnostic pop
+#endif
         }
         if ((val = zend_hash_str_find(ht, "languageVersion", sizeof("languageVersion") - 1)) != NULL) {
             opts.languageVersion = (MTLLanguageVersion)zval_get_long(val);
@@ -3096,7 +3103,9 @@ PHP_MINIT_FUNCTION(metal)
     REGISTER_NS_LONG_CONSTANT("Metal", "GPUFamilyApple6", MTLGPUFamilyApple6, CONST_CS | CONST_PERSISTENT);
     REGISTER_NS_LONG_CONSTANT("Metal", "GPUFamilyApple7", MTLGPUFamilyApple7, CONST_CS | CONST_PERSISTENT);
     REGISTER_NS_LONG_CONSTANT("Metal", "GPUFamilyApple8", MTLGPUFamilyApple8, CONST_CS | CONST_PERSISTENT);
+#if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 140000
     REGISTER_NS_LONG_CONSTANT("Metal", "GPUFamilyApple9", MTLGPUFamilyApple9, CONST_CS | CONST_PERSISTENT);
+#endif
     REGISTER_NS_LONG_CONSTANT("Metal", "GPUFamilyCommon1", MTLGPUFamilyCommon1, CONST_CS | CONST_PERSISTENT);
     REGISTER_NS_LONG_CONSTANT("Metal", "GPUFamilyCommon2", MTLGPUFamilyCommon2, CONST_CS | CONST_PERSISTENT);
     REGISTER_NS_LONG_CONSTANT("Metal", "GPUFamilyCommon3", MTLGPUFamilyCommon3, CONST_CS | CONST_PERSISTENT);
@@ -3122,8 +3131,11 @@ PHP_MINFO_FUNCTION(metal)
             php_info_print_table_row(2, "GPU", [[dev name] UTF8String]);
 
             char family[64];
+#if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 140000
             if ([dev supportsFamily:MTLGPUFamilyApple9]) snprintf(family, sizeof(family), "Apple9+");
-            else if ([dev supportsFamily:MTLGPUFamilyApple8]) snprintf(family, sizeof(family), "Apple8");
+            else
+#endif
+            if ([dev supportsFamily:MTLGPUFamilyApple8]) snprintf(family, sizeof(family), "Apple8");
             else if ([dev supportsFamily:MTLGPUFamilyApple7]) snprintf(family, sizeof(family), "Apple7");
             else if ([dev supportsFamily:MTLGPUFamilyApple6]) snprintf(family, sizeof(family), "Apple6");
             else if ([dev supportsFamily:MTLGPUFamilyApple5]) snprintf(family, sizeof(family), "Apple5");
