@@ -13,7 +13,7 @@ PHP extension for Apple's [Metal GPU API](https://developer.apple.com/metal/). R
 ## Installation
 
 ```bash
-git clone https://github.com/hmennen90/php-metal.git
+git clone https://github.com/hmennen90/php-metal-gpu.git
 cd php-metal
 phpize
 ./configure --enable-metal

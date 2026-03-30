@@ -1,9 +1,9 @@
 {
-    "name": "hmennen90/php-metal",
+    "name": "hmennen90/php-metal-gpu",
     "type": "php-ext",
     "description": "PHP extension for Apple Metal GPU API — compute shaders, render pipelines, ray tracing, mesh shaders",
     "keywords": ["metal", "gpu", "compute", "shader", "apple", "macos", "graphics", "ray-tracing"],
-    "homepage": "https://github.com/hmennen90/php-metal",
+    "homepage": "https://github.com/hmennen90/php-metal-gpu",
     "license": "MIT",
     "authors": [
         {
@@ -25,7 +25,7 @@
         "os-families": ["darwin"]
     },
     "support": {
-        "issues": "https://github.com/hmennen90/php-metal/issues",
-        "source": "https://github.com/hmennen90/php-metal"
+        "issues": "https://github.com/hmennen90/php-metal-gpu/issues",
+        "source": "https://github.com/hmennen90/php-metal-gpu"
     }
 }
