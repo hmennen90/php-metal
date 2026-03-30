@@ -703,15 +703,35 @@ PHP_METHOD(Metal_BinaryArchive, serializeToURL)
 PHP_METHOD(Metal_BinaryArchive, addComputePipelineFunctions)
 {
     zval *zdesc;
-    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zdesc, metal_ce_compute_pipeline_state) ZEND_PARSE_PARAMETERS_END();
-    /* For simplicity, we use the compute pipeline descriptor approach — users create descriptors */
-    zend_throw_exception(metal_ce_exception, "Use addComputePipelineFunctionsWithDescriptor for pipeline caching", 0);
-    RETURN_THROWS();
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zdesc, metal_ce_compute_pipeline_descriptor) ZEND_PARSE_PARAMETERS_END();
+    metal_binary_archive_t *intern = metal_binary_archive_from_obj(Z_OBJ_P(ZEND_THIS));
+    metal_compute_pipeline_descriptor_t *desc = metal_compute_pipeline_descriptor_from_obj(Z_OBJ_P(zdesc));
+    NSError *error = nil;
+    BOOL ok = [intern->archive addComputePipelineFunctionsWithDescriptor:desc->descriptor error:&error];
+    if (!ok) {
+        zend_throw_exception_ex(metal_ce_exception, 0, "Failed to add compute pipeline functions: %s", [[error localizedDescription] UTF8String]);
+        RETURN_THROWS();
+    }
+}
+
+PHP_METHOD(Metal_BinaryArchive, addRenderPipelineFunctions)
+{
+    zval *zdesc;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zdesc, metal_ce_render_pipeline_descriptor) ZEND_PARSE_PARAMETERS_END();
+    metal_binary_archive_t *intern = metal_binary_archive_from_obj(Z_OBJ_P(ZEND_THIS));
+    metal_render_pipeline_descriptor_t *desc = metal_render_pipeline_descriptor_from_obj(Z_OBJ_P(zdesc));
+    NSError *error = nil;
+    BOOL ok = [intern->archive addRenderPipelineFunctionsWithDescriptor:desc->descriptor error:&error];
+    if (!ok) {
+        zend_throw_exception_ex(metal_ce_exception, 0, "Failed to add render pipeline functions: %s", [[error localizedDescription] UTF8String]);
+        RETURN_THROWS();
+    }
 }
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_ba_desc_construct, 0, 0, 0) ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_ba_set_url, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0) ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_ba_serialize, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_ba_addPipeline, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, descriptor, IS_OBJECT, 0) ZEND_END_ARG_INFO()
 
 static const zend_function_entry metal_binary_archive_descriptor_methods[] = {
     PHP_ME(Metal_BinaryArchiveDescriptor, __construct, arginfo_ba_desc_construct, ZEND_ACC_PUBLIC)
@@ -720,7 +740,9 @@ static const zend_function_entry metal_binary_archive_descriptor_methods[] = {
 };
 
 static const zend_function_entry metal_binary_archive_methods[] = {
-    PHP_ME(Metal_BinaryArchive, serializeToURL, arginfo_ba_serialize, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_BinaryArchive, serializeToURL,              arginfo_ba_serialize,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_BinaryArchive, addComputePipelineFunctions,  arginfo_ba_addPipeline, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_BinaryArchive, addRenderPipelineFunctions,   arginfo_ba_addPipeline, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -1161,6 +1183,38 @@ PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setDepthAttachmentPixelFormat)
     metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.depthAttachmentPixelFormat = (MTLPixelFormat)fmt;
 }
 
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, getColorAttachment)
+{
+    zend_long index;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    if (index < 0 || index >= 8) { zend_throw_exception(metal_ce_exception, "Color attachment index must be 0-7", 0); RETURN_THROWS(); }
+    metal_mesh_render_pipeline_descriptor_t *intern = metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS));
+    MTLRenderPipelineColorAttachmentDescriptor *ca = intern->descriptor.colorAttachments[index];
+    object_init_ex(return_value, metal_ce_color_attachment_descriptor);
+    metal_color_attachment_descriptor_from_obj(Z_OBJ_P(return_value))->descriptor = ca;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setStencilAttachmentPixelFormat)
+{
+    zend_long fmt;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(fmt) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.stencilAttachmentPixelFormat = (MTLPixelFormat)fmt;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setRasterSampleCount)
+{
+    zend_long count;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(count) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.rasterSampleCount = (NSUInteger)count;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setAlphaToCoverageEnabled)
+{
+    bool val;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_BOOL(val) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.alphaToCoverageEnabled = val;
+}
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_mrpd_construct, 0, 0, 0) ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_mrpd_setFn, 0, 1, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, fn, Metal\\MetalFunction, 0) ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_mrpd_setLong, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, v, IS_LONG, 0) ZEND_END_ARG_INFO()
@@ -1175,6 +1229,10 @@ static const zend_function_entry metal_mesh_render_pipeline_descriptor_methods[]
     PHP_ME(Metal_MeshRenderPipelineDescriptor, setMaxTotalThreadgroupsPerMeshGrid,    arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
     PHP_ME(Metal_MeshRenderPipelineDescriptor, setPayloadMemoryLength,                arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
     PHP_ME(Metal_MeshRenderPipelineDescriptor, setDepthAttachmentPixelFormat,         arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, getColorAttachment,                   arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setStencilAttachmentPixelFormat,      arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setRasterSampleCount,                 arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setAlphaToCoverageEnabled,            arginfo_icb_set_bool,  ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -1255,6 +1313,83 @@ static const zend_function_entry metal_stencil_descriptor_methods[] = {
 void metal_register_stencil_descriptor_class(void)
 {
     METAL_REGISTER_CLASS(stencil_descriptor, "StencilDescriptor", metal_stencil_descriptor_methods, metal_stencil_descriptor_handlers, metal_ce_stencil_descriptor, ZEND_ACC_NO_DYNAMIC_PROPERTIES);
+}
+
+/* ######################################################################
+ *  SECTION 14: ComputePipelineDescriptor
+ * ###################################################################### */
+
+static zend_object_handlers metal_compute_pipeline_descriptor_handlers;
+METAL_DEFINE_CREATE_FREE(compute_pipeline_descriptor, metal_compute_pipeline_descriptor_t, descriptor, metal_ce_compute_pipeline_descriptor, &metal_compute_pipeline_descriptor_handlers)
+
+PHP_METHOD(Metal_ComputePipelineDescriptor, __construct)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    metal_compute_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor = [[MTLComputePipelineDescriptor alloc] init];
+}
+
+PHP_METHOD(Metal_ComputePipelineDescriptor, setComputeFunction)
+{
+    zval *zfn;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zfn, metal_ce_metal_function) ZEND_PARSE_PARAMETERS_END();
+    metal_compute_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.computeFunction = metal_function_from_obj(Z_OBJ_P(zfn))->function;
+}
+
+PHP_METHOD(Metal_ComputePipelineDescriptor, setThreadGroupSizeIsMultipleOfThreadExecutionWidth)
+{
+    bool val;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_BOOL(val) ZEND_PARSE_PARAMETERS_END();
+    metal_compute_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.threadGroupSizeIsMultipleOfThreadExecutionWidth = val;
+}
+
+PHP_METHOD(Metal_ComputePipelineDescriptor, setMaxTotalThreadsPerThreadgroup)
+{
+    zend_long val;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(val) ZEND_PARSE_PARAMETERS_END();
+    metal_compute_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.maxTotalThreadsPerThreadgroup = (NSUInteger)val;
+}
+
+PHP_METHOD(Metal_ComputePipelineDescriptor, setMaxCallStackDepth)
+{
+    zend_long val;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(val) ZEND_PARSE_PARAMETERS_END();
+    metal_compute_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.maxCallStackDepth = (NSUInteger)val;
+}
+
+PHP_METHOD(Metal_ComputePipelineDescriptor, setSupportIndirectCommandBuffers)
+{
+    bool val;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_BOOL(val) ZEND_PARSE_PARAMETERS_END();
+    metal_compute_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.supportIndirectCommandBuffers = val;
+}
+
+PHP_METHOD(Metal_ComputePipelineDescriptor, setLabel)
+{
+    zend_string *label;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_STR(label) ZEND_PARSE_PARAMETERS_END();
+    metal_compute_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.label = [NSString stringWithUTF8String:ZSTR_VAL(label)];
+}
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_cpd2_construct, 0, 0, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_cpd2_setFn, 0, 1, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, fn, Metal\\MetalFunction, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_cpd2_setBool, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, v, _IS_BOOL, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_cpd2_setLong, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, v, IS_LONG, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_cpd2_setStr, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, v, IS_STRING, 0) ZEND_END_ARG_INFO()
+
+static const zend_function_entry metal_compute_pipeline_descriptor_methods[] = {
+    PHP_ME(Metal_ComputePipelineDescriptor, __construct,                                       arginfo_cpd2_construct, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputePipelineDescriptor, setComputeFunction,                                arginfo_cpd2_setFn,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputePipelineDescriptor, setThreadGroupSizeIsMultipleOfThreadExecutionWidth, arginfo_cpd2_setBool,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputePipelineDescriptor, setMaxTotalThreadsPerThreadgroup,                   arginfo_cpd2_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputePipelineDescriptor, setMaxCallStackDepth,                               arginfo_cpd2_setLong, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputePipelineDescriptor, setSupportIndirectCommandBuffers,                   arginfo_cpd2_setBool,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_ComputePipelineDescriptor, setLabel,                                           arginfo_cpd2_setStr,  ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+void metal_register_compute_pipeline_descriptor_class(void)
+{
+    METAL_REGISTER_CLASS(compute_pipeline_descriptor, "ComputePipelineDescriptor", metal_compute_pipeline_descriptor_methods, metal_compute_pipeline_descriptor_handlers, metal_ce_compute_pipeline_descriptor, ZEND_ACC_NO_DYNAMIC_PROPERTIES);
 }
 
 /* ######################################################################

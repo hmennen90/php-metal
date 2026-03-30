@@ -66,6 +66,7 @@ zend_class_entry *metal_ce_indirect_render_command;
 zend_class_entry *metal_ce_indirect_compute_command;
 zend_class_entry *metal_ce_mesh_render_pipeline_descriptor;
 zend_class_entry *metal_ce_stencil_descriptor;
+zend_class_entry *metal_ce_compute_pipeline_descriptor;
 
 /* ====================================================================
  *  Object handler tables
@@ -730,6 +731,21 @@ PHP_METHOD(Metal_Device, createRenderPipelineStateWithMeshDescriptor)
         RETURN_THROWS();
     }
     METAL_WRAP_RETURN(render_pipeline_state, metal_render_pipeline_state_t, state, metal_ce_render_pipeline_state, state);
+}
+
+PHP_METHOD(Metal_Device, createComputePipelineStateWithDescriptor)
+{
+    zval *zdesc;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zdesc, metal_ce_compute_pipeline_descriptor) ZEND_PARSE_PARAMETERS_END();
+    metal_device_t *dev = metal_device_from_obj(Z_OBJ_P(ZEND_THIS));
+    metal_compute_pipeline_descriptor_t *desc = metal_compute_pipeline_descriptor_from_obj(Z_OBJ_P(zdesc));
+    NSError *error = nil;
+    id<MTLComputePipelineState> state = [dev->device newComputePipelineStateWithDescriptor:desc->descriptor options:0 reflection:nil error:&error];
+    if (!state) {
+        zend_throw_exception_ex(metal_ce_exception, 0, "Failed to create compute pipeline: %s", [[error localizedDescription] UTF8String]);
+        RETURN_THROWS();
+    }
+    METAL_WRAP_RETURN(compute_pipeline_state, metal_compute_pipeline_state_t, state, metal_ce_compute_pipeline_state, state);
 }
 
 PHP_METHOD(Metal_Device, createBufferFromTexture)
@@ -1822,6 +1838,13 @@ PHP_METHOD(Metal_RenderCommandEncoder, popDebugGroup)
 {
     ZEND_PARSE_PARAMETERS_NONE();
     [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder popDebugGroup];
+}
+
+PHP_METHOD(Metal_RenderCommandEncoder, setVertexAmplificationCount)
+{
+    zend_long count;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(count) ZEND_PARSE_PARAMETERS_END();
+    [metal_render_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder setVertexAmplificationCount:(NSUInteger)count viewMappings:nil];
 }
 
 /* }}} */
@@ -3246,6 +3269,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_dev_heapBufSize, 0, 1, IS_ARRAY,
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_dev_heapTexSize, 0, 1, IS_ARRAY, 0) ZEND_ARG_OBJ_INFO(0, d, Metal\\TextureDescriptor, 0) ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_dev_createMeshPSO, 0, 1, Metal\\RenderPipelineState, 0) ZEND_ARG_OBJ_INFO(0, d, Metal\\MeshRenderPipelineDescriptor, 0) ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_cmdbuf_createASEncoder, 0, 0, Metal\\AccelerationStructureCommandEncoder, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_dev_createCPSwithDesc, 0, 1, Metal\\ComputePipelineState, 0) ZEND_ARG_OBJ_INFO(0, d, Metal\\ComputePipelineDescriptor, 0) ZEND_END_ARG_INFO()
 
 /* Stencil support arginfo */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_dsd_setStencil, 0, 1, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, d, Metal\\StencilDescriptor, 0) ZEND_END_ARG_INFO()
@@ -3333,7 +3357,8 @@ static const zend_function_entry metal_device_methods[] = {
     PHP_ME(Metal_Device, getAccelerationStructureSizes,      arginfo_dev_getASSizes,        ZEND_ACC_PUBLIC)
     PHP_ME(Metal_Device, heapBufferSizeAndAlign,             arginfo_dev_heapBufSize,       ZEND_ACC_PUBLIC)
     PHP_ME(Metal_Device, heapTextureSizeAndAlign,            arginfo_dev_heapTexSize,       ZEND_ACC_PUBLIC)
-    PHP_ME(Metal_Device, createRenderPipelineStateWithMeshDescriptor, arginfo_dev_createMeshPSO, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_Device, createRenderPipelineStateWithMeshDescriptor, arginfo_dev_createMeshPSO,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_Device, createComputePipelineStateWithDescriptor,  arginfo_dev_createCPSwithDesc, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3434,6 +3459,7 @@ static const zend_function_entry metal_render_encoder_methods[] = {
     PHP_ME(Metal_RenderCommandEncoder, setMeshBytes,                     arginfo_Metal_ComputeCommandEncoder_setBytes, ZEND_ACC_PUBLIC)
     PHP_ME(Metal_RenderCommandEncoder, pushDebugGroup,                   arginfo_re_debugStr,                  ZEND_ACC_PUBLIC)
     PHP_ME(Metal_RenderCommandEncoder, popDebugGroup,                    arginfo_adv_void,                     ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_RenderCommandEncoder, setVertexAmplificationCount,     arginfo_adv_void_1long,               ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3809,6 +3835,7 @@ PHP_MINIT_FUNCTION(metal)
     metal_register_indirect_command_classes();
     metal_register_mesh_shader_classes();
     metal_register_stencil_descriptor_class();
+    metal_register_compute_pipeline_descriptor_class();
     metal_register_advanced_constants(module_number);
     metal_register_final_constants(module_number);
 
