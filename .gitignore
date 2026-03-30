@@ -1,0 +1,55 @@
+# Build artifacts
+*.lo
+*.la
+*.o
+*.so
+*.dylib
+*.dep
+.libs/
+modules/
+libs/
+
+# Autotools / phpize generated
+acinclude.m4
+aclocal.m4
+autom4te.cache/
+build/
+config.guess
+config.h
+config.h.in
+config.h.in~
+config.log
+config.nice
+config.status
+config.sub
+configure
+configure.ac
+configure.in
+install-sh
+libtool
+ltmain.sh
+Makefile
+Makefile.global
+Makefile.objects
+Makefile.fragments
+missing
+mkinstalldirs
+run-tests.php
+tmp-php.ini
+
+# Test output
+tests/*.diff
+tests/*.exp
+tests/*.log
+tests/*.out
+tests/*.php
+tests/*.sh
+tests/*.mem
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+.DS_Store

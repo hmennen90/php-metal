@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Verify version matches extension
+        run: |
+          grep -q "PHP_METAL_VERSION \"${{ steps.version.outputs.version }}\"" php_metal.h || {
+            echo "::error::Tag version ${{ steps.version.outputs.version }} does not match PHP_METAL_VERSION in php_metal.h"
+            exit 1
+          }
+
+      - name: Create source archive
+        run: |
+          tar czf php-metal-${{ steps.version.outputs.version }}.tar.gz \
+            --exclude='.git*' \
+            --exclude='tests/*.log' \
+            --exclude='tests/*.diff' \
+            -C .. php-metal
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: php-metal-${{ steps.version.outputs.version }}.tar.gz
+
+  build-artifacts:
+    name: Build – PHP ${{ matrix.php }}
+    runs-on: macos-14
+    needs: release
+    strategy:
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: phpize, php-config
+          extensions: none
+          coverage: none
+
+      - name: Build
+        run: |
+          phpize
+          ./configure --enable-metal
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Run tests
+        run: make test TESTS=tests/ NO_INTERACTION=1 REPORT_EXIT_STATUS=1
+
+      - name: Package .so
+        run: |
+          PHP_API=$(php-config --phpapi)
+          cp modules/metal.so metal-php${{ matrix.php }}-${PHP_API}-arm64.so
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: metal-php${{ matrix.php }}-*.so

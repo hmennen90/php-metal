@@ -1,0 +1,58 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: PHP ${{ matrix.php }} – macOS ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+        php: ['8.2', '8.3', '8.4']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: phpize, php-config
+          extensions: none
+          coverage: none
+
+      - name: Build extension
+        run: |
+          phpize
+          ./configure --enable-metal
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Verify extension loads
+        run: php -d extension=modules/metal.so -m | grep metal
+
+      - name: Show GPU info
+        run: |
+          php -d extension=modules/metal.so -r "
+            \$d = Metal\createSystemDefaultDevice();
+            echo 'GPU: ' . \$d->getName() . PHP_EOL;
+            echo 'Max buffer: ' . number_format(\$d->getMaxBufferLength() / 1024 / 1024) . ' MB' . PHP_EOL;
+          "
+
+      - name: Run tests
+        run: make test TESTS=tests/ NO_INTERACTION=1 REPORT_EXIT_STATUS=1
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-php${{ matrix.php }}-${{ matrix.os }}
+          path: |
+            tests/*.log
+            tests/*.diff
+            tests/*.out
