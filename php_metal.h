@@ -50,6 +50,24 @@ extern zend_class_entry *metal_ce_blit_encoder;
 extern zend_class_entry *metal_ce_drawable;
 extern zend_class_entry *metal_ce_exception;
 
+/* Advanced classes */
+extern zend_class_entry *metal_ce_event;
+extern zend_class_entry *metal_ce_shared_event;
+extern zend_class_entry *metal_ce_fence;
+extern zend_class_entry *metal_ce_heap;
+extern zend_class_entry *metal_ce_heap_descriptor;
+extern zend_class_entry *metal_ce_indirect_command_buffer;
+extern zend_class_entry *metal_ce_icb_descriptor;
+extern zend_class_entry *metal_ce_argument_encoder;
+extern zend_class_entry *metal_ce_acceleration_structure;
+extern zend_class_entry *metal_ce_prim_accel_descriptor;
+extern zend_class_entry *metal_ce_inst_accel_descriptor;
+extern zend_class_entry *metal_ce_triangle_geometry_descriptor;
+extern zend_class_entry *metal_ce_bbox_geometry_descriptor;
+extern zend_class_entry *metal_ce_binary_archive;
+extern zend_class_entry *metal_ce_binary_archive_descriptor;
+extern zend_class_entry *metal_ce_compute_pass_descriptor;
+
 /* ------------------------------------------------------------------ */
 /*  PHP version compatibility                                          */
 /* ------------------------------------------------------------------ */

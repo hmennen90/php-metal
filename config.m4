@@ -17,5 +17,5 @@ if test "$PHP_METAL" != "no"; then
   METAL_SHARED_LIBADD="-framework Metal -framework Foundation"
   PHP_SUBST(METAL_SHARED_LIBADD)
 
-  PHP_NEW_EXTENSION(metal, [metal.c], $ext_shared,, [-fobjc-arc -xobjective-c])
+  PHP_NEW_EXTENSION(metal, [metal.c metal_advanced.c], $ext_shared,, [-fobjc-arc -xobjective-c])
 fi
