@@ -133,6 +133,10 @@ typedef struct { MTLAccelerationStructureBoundingBoxGeometryDescriptor *descript
 typedef struct { id<MTLBinaryArchive> archive;                                zend_object std; } metal_binary_archive_t;
 typedef struct { MTLBinaryArchiveDescriptor *descriptor;                      zend_object std; } metal_binary_archive_descriptor_t;
 typedef struct { MTLComputePassDescriptor *descriptor;                        zend_object std; } metal_compute_pass_descriptor_t;
+typedef struct { id<MTLAccelerationStructureCommandEncoder> encoder;           zend_object std; } metal_accel_encoder_t;
+typedef struct { id<MTLIndirectRenderCommand> command;                         zend_object std; } metal_indirect_render_command_t;
+typedef struct { id<MTLIndirectComputeCommand> command;                        zend_object std; } metal_indirect_compute_command_t;
+typedef struct { MTLMeshRenderPipelineDescriptor *descriptor;                  zend_object std; } metal_mesh_render_pipeline_descriptor_t;
 
 /* ====================================================================
  *  Core from_obj inline accessors
@@ -180,6 +184,10 @@ static inline metal_bbox_geometry_descriptor_t *metal_bbox_geometry_descriptor_f
 static inline metal_binary_archive_t *metal_binary_archive_from_obj(zend_object *o) { return METAL_OBJ(metal_binary_archive_t, o); }
 static inline metal_binary_archive_descriptor_t *metal_binary_archive_descriptor_from_obj(zend_object *o) { return METAL_OBJ(metal_binary_archive_descriptor_t, o); }
 static inline metal_compute_pass_descriptor_t *metal_compute_pass_descriptor_from_obj(zend_object *o) { return METAL_OBJ(metal_compute_pass_descriptor_t, o); }
+static inline metal_accel_encoder_t *metal_accel_encoder_from_obj(zend_object *o) { return METAL_OBJ(metal_accel_encoder_t, o); }
+static inline metal_indirect_render_command_t *metal_indirect_render_command_from_obj(zend_object *o) { return METAL_OBJ(metal_indirect_render_command_t, o); }
+static inline metal_indirect_compute_command_t *metal_indirect_compute_command_from_obj(zend_object *o) { return METAL_OBJ(metal_indirect_compute_command_t, o); }
+static inline metal_mesh_render_pipeline_descriptor_t *metal_mesh_render_pipeline_descriptor_from_obj(zend_object *o) { return METAL_OBJ(metal_mesh_render_pipeline_descriptor_t, o); }
 
 /* ====================================================================
  *  Helper: read MTLSize from a PHP array [w, h, d]
@@ -208,5 +216,8 @@ void metal_register_acceleration_classes(void);
 void metal_register_binary_archive_classes(void);
 void metal_register_compute_pass_descriptor_class(void);
 void metal_register_advanced_constants(int module_number);
+void metal_register_accel_encoder_class(void);
+void metal_register_indirect_command_classes(void);
+void metal_register_mesh_shader_classes(void);
 
 #endif /* METAL_INTERNAL_H */

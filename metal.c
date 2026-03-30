@@ -61,6 +61,10 @@ zend_class_entry *metal_ce_bbox_geometry_descriptor;
 zend_class_entry *metal_ce_binary_archive;
 zend_class_entry *metal_ce_binary_archive_descriptor;
 zend_class_entry *metal_ce_compute_pass_descriptor;
+zend_class_entry *metal_ce_accel_encoder;
+zend_class_entry *metal_ce_indirect_render_command;
+zend_class_entry *metal_ce_indirect_compute_command;
+zend_class_entry *metal_ce_mesh_render_pipeline_descriptor;
 
 /* ====================================================================
  *  Object handler tables
@@ -706,6 +710,36 @@ PHP_METHOD(Metal_Device, heapTextureSizeAndAlign)
     add_assoc_long(return_value, "align", (zend_long)sa.align);
 }
 
+PHP_METHOD(Metal_Device, createRenderPipelineStateWithMeshDescriptor)
+{
+    zval *zdesc;
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_OBJECT_OF_CLASS(zdesc, metal_ce_mesh_render_pipeline_descriptor)
+    ZEND_PARSE_PARAMETERS_END();
+
+    metal_device_t *dev = metal_device_from_obj(Z_OBJ_P(ZEND_THIS));
+    metal_mesh_render_pipeline_descriptor_t *desc = metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(zdesc));
+    NSError *error = nil;
+    id<MTLRenderPipelineState> state = [dev->device newRenderPipelineStateWithMeshDescriptor:desc->descriptor
+                                                                                    options:0
+                                                                                 reflection:nil
+                                                                                      error:&error];
+    if (!state) {
+        zend_throw_exception_ex(metal_ce_exception, 0, "Failed to create mesh render pipeline: %s", [[error localizedDescription] UTF8String]);
+        RETURN_THROWS();
+    }
+    METAL_WRAP_RETURN(render_pipeline_state, metal_render_pipeline_state_t, state, metal_ce_render_pipeline_state, state);
+}
+
+PHP_METHOD(Metal_Device, createBufferFromTexture)
+{
+    zval *ztex;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(ztex, metal_ce_texture) ZEND_PARSE_PARAMETERS_END();
+    /* Not directly available — users should use blit encoder to copy texture to buffer */
+    zend_throw_exception(metal_ce_exception, "Use BlitCommandEncoder to copy texture data to a buffer", 0);
+    RETURN_THROWS();
+}
+
 /* }}} */
 
 /* ====================================================================
@@ -1087,6 +1121,15 @@ PHP_METHOD(Metal_CommandBuffer, createComputeCommandEncoderWithDescriptor)
     id<MTLComputeCommandEncoder> enc = [intern->buffer computeCommandEncoderWithDescriptor:desc->descriptor];
     if (!enc) { zend_throw_exception(metal_ce_exception, "Failed to create compute encoder with descriptor", 0); RETURN_THROWS(); }
     METAL_WRAP_RETURN(compute_encoder, metal_compute_encoder_t, encoder, metal_ce_compute_encoder, enc);
+}
+
+PHP_METHOD(Metal_CommandBuffer, createAccelerationStructureCommandEncoder)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    metal_command_buffer_t *intern = metal_command_buffer_from_obj(Z_OBJ_P(ZEND_THIS));
+    id<MTLAccelerationStructureCommandEncoder> enc = [intern->buffer accelerationStructureCommandEncoder];
+    if (!enc) { zend_throw_exception(metal_ce_exception, "Failed to create acceleration structure command encoder", 0); RETURN_THROWS(); }
+    METAL_WRAP_RETURN(accel_encoder, metal_accel_encoder_t, encoder, metal_ce_accel_encoder, enc);
 }
 
 /* }}} */
@@ -1797,6 +1840,8 @@ PHP_METHOD(Metal_Texture, getMipmapLevelCount) { ZEND_PARSE_PARAMETERS_NONE(); R
 PHP_METHOD(Metal_Texture, getArrayLength) { ZEND_PARSE_PARAMETERS_NONE(); RETURN_LONG((zend_long)[metal_texture_from_obj(Z_OBJ_P(ZEND_THIS))->texture arrayLength]); }
 PHP_METHOD(Metal_Texture, getSampleCount) { ZEND_PARSE_PARAMETERS_NONE(); RETURN_LONG((zend_long)[metal_texture_from_obj(Z_OBJ_P(ZEND_THIS))->texture sampleCount]); }
 PHP_METHOD(Metal_Texture, isFramebufferOnly) { ZEND_PARSE_PARAMETERS_NONE(); RETURN_BOOL([metal_texture_from_obj(Z_OBJ_P(ZEND_THIS))->texture isFramebufferOnly]); }
+PHP_METHOD(Metal_Texture, makeAliasable) { ZEND_PARSE_PARAMETERS_NONE(); [metal_texture_from_obj(Z_OBJ_P(ZEND_THIS))->texture makeAliasable]; }
+PHP_METHOD(Metal_Texture, isAliasable) { ZEND_PARSE_PARAMETERS_NONE(); RETURN_BOOL([metal_texture_from_obj(Z_OBJ_P(ZEND_THIS))->texture isAliasable]); }
 
 /* }}} */
 
@@ -2911,6 +2956,8 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_dev_createAS, 0, 1, Metal\\Accele
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_dev_getASSizes, 0, 1, IS_ARRAY, 0) ZEND_ARG_TYPE_INFO(0, descriptor, IS_OBJECT, 0) ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_dev_heapBufSize, 0, 1, IS_ARRAY, 0) ZEND_ARG_TYPE_INFO(0, length, IS_LONG, 0) ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_LONG, 0, "0") ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_dev_heapTexSize, 0, 1, IS_ARRAY, 0) ZEND_ARG_OBJ_INFO(0, d, Metal\\TextureDescriptor, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_dev_createMeshPSO, 0, 1, Metal\\RenderPipelineState, 0) ZEND_ARG_OBJ_INFO(0, d, Metal\\MeshRenderPipelineDescriptor, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_cmdbuf_createASEncoder, 0, 0, Metal\\AccelerationStructureCommandEncoder, 0) ZEND_END_ARG_INFO()
 
 /* Buffer enhanced */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_buf_didModify, 0, 2, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, offset, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, length, IS_LONG, 0) ZEND_END_ARG_INFO()
@@ -2982,6 +3029,7 @@ static const zend_function_entry metal_device_methods[] = {
     PHP_ME(Metal_Device, getAccelerationStructureSizes,      arginfo_dev_getASSizes,        ZEND_ACC_PUBLIC)
     PHP_ME(Metal_Device, heapBufferSizeAndAlign,             arginfo_dev_heapBufSize,       ZEND_ACC_PUBLIC)
     PHP_ME(Metal_Device, heapTextureSizeAndAlign,            arginfo_dev_heapTexSize,       ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_Device, createRenderPipelineStateWithMeshDescriptor, arginfo_dev_createMeshPSO, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3012,7 +3060,8 @@ static const zend_function_entry metal_command_buffer_methods[] = {
     PHP_ME(Metal_CommandBuffer, presentDrawable,             arginfo_Metal_CommandBuffer_presentDrawable,             ZEND_ACC_PUBLIC)
     PHP_ME(Metal_CommandBuffer, encodeSignalEvent,         arginfo_cmdbuf_encodeEvent,   ZEND_ACC_PUBLIC)
     PHP_ME(Metal_CommandBuffer, encodeWaitForEvent,        arginfo_cmdbuf_encodeEvent,   ZEND_ACC_PUBLIC)
-    PHP_ME(Metal_CommandBuffer, createComputeCommandEncoderWithDescriptor, arginfo_cmdbuf_createCEwithDesc, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_CommandBuffer, createComputeCommandEncoderWithDescriptor,    arginfo_cmdbuf_createCEwithDesc, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_CommandBuffer, createAccelerationStructureCommandEncoder,  arginfo_cmdbuf_createASEncoder,  ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3114,6 +3163,8 @@ static const zend_function_entry metal_texture_methods[] = {
     PHP_ME(Metal_Texture, getArrayLength,      arginfo_adv_long,                   ZEND_ACC_PUBLIC)
     PHP_ME(Metal_Texture, getSampleCount,      arginfo_adv_long,                   ZEND_ACC_PUBLIC)
     PHP_ME(Metal_Texture, isFramebufferOnly,   arginfo_adv_bool,                   ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_Texture, makeAliasable,       arginfo_adv_void,                   ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_Texture, isAliasable,         arginfo_adv_bool,                   ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -3406,6 +3457,9 @@ PHP_MINIT_FUNCTION(metal)
     metal_register_acceleration_classes();
     metal_register_binary_archive_classes();
     metal_register_compute_pass_descriptor_class();
+    metal_register_accel_encoder_class();
+    metal_register_indirect_command_classes();
+    metal_register_mesh_shader_classes();
     metal_register_advanced_constants(module_number);
 
     return SUCCESS;

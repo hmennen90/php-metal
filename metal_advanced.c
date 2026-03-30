@@ -272,6 +272,24 @@ PHP_METHOD(Metal_IndirectCommandBuffer, getSize)
     RETURN_LONG((zend_long)[metal_indirect_command_buffer_from_obj(Z_OBJ_P(ZEND_THIS))->buffer size]);
 }
 
+PHP_METHOD(Metal_IndirectCommandBuffer, indirectRenderCommandAtIndex)
+{
+    zend_long index;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    metal_indirect_command_buffer_t *intern = metal_indirect_command_buffer_from_obj(Z_OBJ_P(ZEND_THIS));
+    id<MTLIndirectRenderCommand> cmd = [intern->buffer indirectRenderCommandAtIndex:(NSUInteger)index];
+    METAL_WRAP_RETURN(indirect_render_command, metal_indirect_render_command_t, command, metal_ce_indirect_render_command, cmd);
+}
+
+PHP_METHOD(Metal_IndirectCommandBuffer, indirectComputeCommandAtIndex)
+{
+    zend_long index;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    metal_indirect_command_buffer_t *intern = metal_indirect_command_buffer_from_obj(Z_OBJ_P(ZEND_THIS));
+    id<MTLIndirectComputeCommand> cmd = [intern->buffer indirectComputeCommandAtIndex:(NSUInteger)index];
+    METAL_WRAP_RETURN(indirect_compute_command, metal_indirect_compute_command_t, command, metal_ce_indirect_compute_command, cmd);
+}
+
 PHP_METHOD(Metal_IndirectCommandBuffer, resetWithRange)
 {
     zend_long offset, length;
@@ -295,9 +313,14 @@ static const zend_function_entry metal_icb_descriptor_methods[] = {
     PHP_FE_END
 };
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_icb_render_cmd, 0, 1, Metal\\IndirectRenderCommand, 0) ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_icb_compute_cmd, 0, 1, Metal\\IndirectComputeCommand, 0) ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0) ZEND_END_ARG_INFO()
+
 static const zend_function_entry metal_icb_methods[] = {
-    PHP_ME(Metal_IndirectCommandBuffer, getSize,       arginfo_icb_get_size, ZEND_ACC_PUBLIC)
-    PHP_ME(Metal_IndirectCommandBuffer, resetWithRange, arginfo_icb_reset,   ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectCommandBuffer, getSize,                       arginfo_icb_get_size,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectCommandBuffer, resetWithRange,                arginfo_icb_reset,       ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectCommandBuffer, indirectRenderCommandAtIndex,  arginfo_icb_render_cmd,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectCommandBuffer, indirectComputeCommandAtIndex, arginfo_icb_compute_cmd, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -792,4 +815,370 @@ void metal_register_advanced_constants(int module_number)
     REGISTER_NS_LONG_CONSTANT("Metal", "AccelerationStructureUsageNone",       MTLAccelerationStructureUsageNone,       CONST_CS | CONST_PERSISTENT);
     REGISTER_NS_LONG_CONSTANT("Metal", "AccelerationStructureUsageRefit",      MTLAccelerationStructureUsageRefit,      CONST_CS | CONST_PERSISTENT);
     REGISTER_NS_LONG_CONSTANT("Metal", "AccelerationStructureUsagePreferFastBuild", MTLAccelerationStructureUsagePreferFastBuild, CONST_CS | CONST_PERSISTENT);
+
+    /* Acceleration structure instance descriptor size (for buffer allocation) */
+    REGISTER_NS_LONG_CONSTANT("Metal", "AccelerationStructureInstanceDescriptorSize", sizeof(MTLAccelerationStructureInstanceDescriptor), CONST_CS | CONST_PERSISTENT);
+}
+
+/* ######################################################################
+ *  SECTION 9: AccelerationStructureCommandEncoder
+ * ###################################################################### */
+
+static zend_object_handlers metal_accel_encoder_handlers;
+METAL_DEFINE_CREATE_FREE(accel_encoder, metal_accel_encoder_t, encoder, metal_ce_accel_encoder, &metal_accel_encoder_handlers)
+
+PHP_METHOD(Metal_AccelerationStructureCommandEncoder, buildAccelerationStructure)
+{
+    zval *zas, *zdesc, *zscratch;
+    zend_long scratch_offset = 0;
+    ZEND_PARSE_PARAMETERS_START(3, 4)
+        Z_PARAM_OBJECT_OF_CLASS(zas, metal_ce_acceleration_structure)
+        Z_PARAM_OBJECT(zdesc)
+        Z_PARAM_OBJECT_OF_CLASS(zscratch, metal_ce_buffer)
+        Z_PARAM_OPTIONAL Z_PARAM_LONG(scratch_offset)
+    ZEND_PARSE_PARAMETERS_END();
+
+    metal_accel_encoder_t *intern = metal_accel_encoder_from_obj(Z_OBJ_P(ZEND_THIS));
+    MTLAccelerationStructureDescriptor *desc = nil;
+    if (instanceof_function(Z_OBJCE_P(zdesc), metal_ce_prim_accel_descriptor))
+        desc = metal_prim_accel_descriptor_from_obj(Z_OBJ_P(zdesc))->descriptor;
+    else if (instanceof_function(Z_OBJCE_P(zdesc), metal_ce_inst_accel_descriptor))
+        desc = (MTLAccelerationStructureDescriptor *)metal_inst_accel_descriptor_from_obj(Z_OBJ_P(zdesc))->descriptor;
+    else { zend_throw_exception(metal_ce_exception, "Expected acceleration structure descriptor", 0); RETURN_THROWS(); }
+
+    [intern->encoder buildAccelerationStructure:metal_acceleration_structure_from_obj(Z_OBJ_P(zas))->accel
+                                     descriptor:desc
+                                  scratchBuffer:metal_buffer_from_obj(Z_OBJ_P(zscratch))->buffer
+                            scratchBufferOffset:(NSUInteger)scratch_offset];
+}
+
+PHP_METHOD(Metal_AccelerationStructureCommandEncoder, refitAccelerationStructure)
+{
+    zval *zsrc, *zdesc, *zdst, *zscratch;
+    zend_long scratch_offset = 0;
+    ZEND_PARSE_PARAMETERS_START(4, 5)
+        Z_PARAM_OBJECT_OF_CLASS(zsrc, metal_ce_acceleration_structure)
+        Z_PARAM_OBJECT(zdesc)
+        Z_PARAM_OBJECT_OF_CLASS(zdst, metal_ce_acceleration_structure)
+        Z_PARAM_OBJECT_OF_CLASS(zscratch, metal_ce_buffer)
+        Z_PARAM_OPTIONAL Z_PARAM_LONG(scratch_offset)
+    ZEND_PARSE_PARAMETERS_END();
+
+    metal_accel_encoder_t *intern = metal_accel_encoder_from_obj(Z_OBJ_P(ZEND_THIS));
+    MTLAccelerationStructureDescriptor *desc = nil;
+    if (instanceof_function(Z_OBJCE_P(zdesc), metal_ce_prim_accel_descriptor))
+        desc = metal_prim_accel_descriptor_from_obj(Z_OBJ_P(zdesc))->descriptor;
+    else if (instanceof_function(Z_OBJCE_P(zdesc), metal_ce_inst_accel_descriptor))
+        desc = (MTLAccelerationStructureDescriptor *)metal_inst_accel_descriptor_from_obj(Z_OBJ_P(zdesc))->descriptor;
+    else { zend_throw_exception(metal_ce_exception, "Expected acceleration structure descriptor", 0); RETURN_THROWS(); }
+
+    [intern->encoder refitAccelerationStructure:metal_acceleration_structure_from_obj(Z_OBJ_P(zsrc))->accel
+                                     descriptor:desc
+                                    destination:metal_acceleration_structure_from_obj(Z_OBJ_P(zdst))->accel
+                                  scratchBuffer:metal_buffer_from_obj(Z_OBJ_P(zscratch))->buffer
+                            scratchBufferOffset:(NSUInteger)scratch_offset];
+}
+
+PHP_METHOD(Metal_AccelerationStructureCommandEncoder, copyAccelerationStructure)
+{
+    zval *zsrc, *zdst;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_OBJECT_OF_CLASS(zsrc, metal_ce_acceleration_structure)
+        Z_PARAM_OBJECT_OF_CLASS(zdst, metal_ce_acceleration_structure)
+    ZEND_PARSE_PARAMETERS_END();
+
+    [metal_accel_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder
+        copyAccelerationStructure:metal_acceleration_structure_from_obj(Z_OBJ_P(zsrc))->accel
+        toAccelerationStructure:metal_acceleration_structure_from_obj(Z_OBJ_P(zdst))->accel];
+}
+
+PHP_METHOD(Metal_AccelerationStructureCommandEncoder, writeCompactedSize)
+{
+    zval *zas, *zbuf;
+    zend_long offset = 0;
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_OBJECT_OF_CLASS(zas, metal_ce_acceleration_structure)
+        Z_PARAM_OBJECT_OF_CLASS(zbuf, metal_ce_buffer)
+        Z_PARAM_OPTIONAL Z_PARAM_LONG(offset)
+    ZEND_PARSE_PARAMETERS_END();
+
+    [metal_accel_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder
+        writeCompactedAccelerationStructureSize:metal_acceleration_structure_from_obj(Z_OBJ_P(zas))->accel
+        toBuffer:metal_buffer_from_obj(Z_OBJ_P(zbuf))->buffer
+        offset:(NSUInteger)offset];
+}
+
+PHP_METHOD(Metal_AccelerationStructureCommandEncoder, endEncoding)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    [metal_accel_encoder_from_obj(Z_OBJ_P(ZEND_THIS))->encoder endEncoding];
+}
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_ase_build, 0, 3, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, as, Metal\\AccelerationStructure, 0)
+    ZEND_ARG_TYPE_INFO(0, descriptor, IS_OBJECT, 0)
+    ZEND_ARG_OBJ_INFO(0, scratchBuffer, Metal\\Buffer, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, scratchBufferOffset, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_ase_refit, 0, 4, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, source, Metal\\AccelerationStructure, 0)
+    ZEND_ARG_TYPE_INFO(0, descriptor, IS_OBJECT, 0)
+    ZEND_ARG_OBJ_INFO(0, destination, Metal\\AccelerationStructure, 0)
+    ZEND_ARG_OBJ_INFO(0, scratchBuffer, Metal\\Buffer, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, scratchBufferOffset, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_ase_copy, 0, 2, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, source, Metal\\AccelerationStructure, 0)
+    ZEND_ARG_OBJ_INFO(0, destination, Metal\\AccelerationStructure, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_ase_writeSize, 0, 2, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, as, Metal\\AccelerationStructure, 0)
+    ZEND_ARG_OBJ_INFO(0, buffer, Metal\\Buffer, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, offset, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_ase_void, 0, 0, IS_VOID, 0) ZEND_END_ARG_INFO()
+
+static const zend_function_entry metal_accel_encoder_methods[] = {
+    PHP_ME(Metal_AccelerationStructureCommandEncoder, buildAccelerationStructure,  arginfo_ase_build,     ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_AccelerationStructureCommandEncoder, refitAccelerationStructure,  arginfo_ase_refit,     ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_AccelerationStructureCommandEncoder, copyAccelerationStructure,   arginfo_ase_copy,      ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_AccelerationStructureCommandEncoder, writeCompactedSize,          arginfo_ase_writeSize, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_AccelerationStructureCommandEncoder, endEncoding,                 arginfo_ase_void,      ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+void metal_register_accel_encoder_class(void)
+{
+    METAL_REGISTER_CLASS(accel_encoder, "AccelerationStructureCommandEncoder", metal_accel_encoder_methods, metal_accel_encoder_handlers, metal_ce_accel_encoder, ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES);
+}
+
+/* ######################################################################
+ *  SECTION 10: Indirect Render/Compute Commands
+ * ###################################################################### */
+
+static zend_object_handlers metal_indirect_render_command_handlers;
+static zend_object_handlers metal_indirect_compute_command_handlers;
+
+METAL_DEFINE_CREATE_FREE(indirect_render_command,  metal_indirect_render_command_t,  command, metal_ce_indirect_render_command,  &metal_indirect_render_command_handlers)
+METAL_DEFINE_CREATE_FREE(indirect_compute_command, metal_indirect_compute_command_t, command, metal_ce_indirect_compute_command, &metal_indirect_compute_command_handlers)
+
+/* --- IndirectRenderCommand methods --- */
+
+PHP_METHOD(Metal_IndirectRenderCommand, setRenderPipelineState)
+{
+    zval *zstate;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zstate, metal_ce_render_pipeline_state) ZEND_PARSE_PARAMETERS_END();
+    [metal_indirect_render_command_from_obj(Z_OBJ_P(ZEND_THIS))->command setRenderPipelineState:metal_render_pipeline_state_from_obj(Z_OBJ_P(zstate))->state];
+}
+
+PHP_METHOD(Metal_IndirectRenderCommand, setVertexBuffer)
+{
+    zval *zbuf; zend_long offset, index;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zbuf, metal_ce_buffer) Z_PARAM_LONG(offset) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    [metal_indirect_render_command_from_obj(Z_OBJ_P(ZEND_THIS))->command setVertexBuffer:metal_buffer_from_obj(Z_OBJ_P(zbuf))->buffer offset:(NSUInteger)offset atIndex:(NSUInteger)index];
+}
+
+PHP_METHOD(Metal_IndirectRenderCommand, setFragmentBuffer)
+{
+    zval *zbuf; zend_long offset, index;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zbuf, metal_ce_buffer) Z_PARAM_LONG(offset) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    [metal_indirect_render_command_from_obj(Z_OBJ_P(ZEND_THIS))->command setFragmentBuffer:metal_buffer_from_obj(Z_OBJ_P(zbuf))->buffer offset:(NSUInteger)offset atIndex:(NSUInteger)index];
+}
+
+PHP_METHOD(Metal_IndirectRenderCommand, drawPrimitives)
+{
+    zend_long type, start, count, instances, base;
+    ZEND_PARSE_PARAMETERS_START(5, 5) Z_PARAM_LONG(type) Z_PARAM_LONG(start) Z_PARAM_LONG(count) Z_PARAM_LONG(instances) Z_PARAM_LONG(base) ZEND_PARSE_PARAMETERS_END();
+    [metal_indirect_render_command_from_obj(Z_OBJ_P(ZEND_THIS))->command drawPrimitives:(MTLPrimitiveType)type vertexStart:(NSUInteger)start vertexCount:(NSUInteger)count instanceCount:(NSUInteger)instances baseInstance:(NSUInteger)base];
+}
+
+PHP_METHOD(Metal_IndirectRenderCommand, drawIndexedPrimitives)
+{
+    zend_long type, index_count, index_type, ibo_offset, instances, base_vertex, base_instance;
+    zval *zibo;
+    ZEND_PARSE_PARAMETERS_START(7, 7)
+        Z_PARAM_LONG(type) Z_PARAM_LONG(index_count) Z_PARAM_LONG(index_type)
+        Z_PARAM_OBJECT_OF_CLASS(zibo, metal_ce_buffer) Z_PARAM_LONG(ibo_offset)
+        Z_PARAM_LONG(instances) Z_PARAM_LONG(base_vertex)
+    ZEND_PARSE_PARAMETERS_END();
+    base_instance = 0; /* simplified */
+    [metal_indirect_render_command_from_obj(Z_OBJ_P(ZEND_THIS))->command
+        drawIndexedPrimitives:(MTLPrimitiveType)type indexCount:(NSUInteger)index_count indexType:(MTLIndexType)index_type
+        indexBuffer:metal_buffer_from_obj(Z_OBJ_P(zibo))->buffer indexBufferOffset:(NSUInteger)ibo_offset
+        instanceCount:(NSUInteger)instances baseVertex:(NSInteger)base_vertex baseInstance:(NSUInteger)base_instance];
+}
+
+PHP_METHOD(Metal_IndirectRenderCommand, reset)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    [metal_indirect_render_command_from_obj(Z_OBJ_P(ZEND_THIS))->command reset];
+}
+
+/* --- IndirectComputeCommand methods --- */
+
+PHP_METHOD(Metal_IndirectComputeCommand, setComputePipelineState)
+{
+    zval *zstate;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zstate, metal_ce_compute_pipeline_state) ZEND_PARSE_PARAMETERS_END();
+    [metal_indirect_compute_command_from_obj(Z_OBJ_P(ZEND_THIS))->command setComputePipelineState:metal_compute_pipeline_state_from_obj(Z_OBJ_P(zstate))->state];
+}
+
+PHP_METHOD(Metal_IndirectComputeCommand, setKernelBuffer)
+{
+    zval *zbuf; zend_long offset, index;
+    ZEND_PARSE_PARAMETERS_START(3, 3) Z_PARAM_OBJECT_OF_CLASS(zbuf, metal_ce_buffer) Z_PARAM_LONG(offset) Z_PARAM_LONG(index) ZEND_PARSE_PARAMETERS_END();
+    [metal_indirect_compute_command_from_obj(Z_OBJ_P(ZEND_THIS))->command setKernelBuffer:metal_buffer_from_obj(Z_OBJ_P(zbuf))->buffer offset:(NSUInteger)offset atIndex:(NSUInteger)index];
+}
+
+PHP_METHOD(Metal_IndirectComputeCommand, concurrentDispatchThreadgroups)
+{
+    zval *tg_arr, *tptg_arr;
+    ZEND_PARSE_PARAMETERS_START(2, 2) Z_PARAM_ARRAY(tg_arr) Z_PARAM_ARRAY(tptg_arr) ZEND_PARSE_PARAMETERS_END();
+    MTLSize tg = metal_parse_size(tg_arr);
+    MTLSize tptg = metal_parse_size(tptg_arr);
+    [metal_indirect_compute_command_from_obj(Z_OBJ_P(ZEND_THIS))->command concurrentDispatchThreadgroups:tg threadsPerThreadgroup:tptg];
+}
+
+PHP_METHOD(Metal_IndirectComputeCommand, concurrentDispatchThreads)
+{
+    zval *grid_arr, *tg_arr;
+    ZEND_PARSE_PARAMETERS_START(2, 2) Z_PARAM_ARRAY(grid_arr) Z_PARAM_ARRAY(tg_arr) ZEND_PARSE_PARAMETERS_END();
+    MTLSize grid = metal_parse_size(grid_arr);
+    MTLSize tg = metal_parse_size(tg_arr);
+    [metal_indirect_compute_command_from_obj(Z_OBJ_P(ZEND_THIS))->command concurrentDispatchThreads:grid threadsPerThreadgroup:tg];
+}
+
+PHP_METHOD(Metal_IndirectComputeCommand, reset)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    [metal_indirect_compute_command_from_obj(Z_OBJ_P(ZEND_THIS))->command reset];
+}
+
+/* --- Arginfo for indirect commands --- */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_irc_setPSO, 0, 1, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, state, Metal\\RenderPipelineState, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_irc_setBuf, 0, 3, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, buf, Metal\\Buffer, 0) ZEND_ARG_TYPE_INFO(0, offset, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_irc_draw, 0, 5, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, type, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, start, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, count, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, instances, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, baseInstance, IS_LONG, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_irc_drawIdx, 0, 7, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, type, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, indexCount, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, indexType, IS_LONG, 0) ZEND_ARG_OBJ_INFO(0, ibo, Metal\\Buffer, 0) ZEND_ARG_TYPE_INFO(0, iboOff, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, instances, IS_LONG, 0) ZEND_ARG_TYPE_INFO(0, baseVertex, IS_LONG, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_irc_void, 0, 0, IS_VOID, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_icc_setPSO, 0, 1, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, state, Metal\\ComputePipelineState, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_icc_dispatch, 0, 2, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, threadgroups, IS_ARRAY, 0) ZEND_ARG_TYPE_INFO(0, threadsPerThreadgroup, IS_ARRAY, 0) ZEND_END_ARG_INFO()
+
+static const zend_function_entry metal_indirect_render_command_methods[] = {
+    PHP_ME(Metal_IndirectRenderCommand, setRenderPipelineState, arginfo_irc_setPSO,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectRenderCommand, setVertexBuffer,        arginfo_irc_setBuf,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectRenderCommand, setFragmentBuffer,      arginfo_irc_setBuf,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectRenderCommand, drawPrimitives,         arginfo_irc_draw,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectRenderCommand, drawIndexedPrimitives,  arginfo_irc_drawIdx, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectRenderCommand, reset,                  arginfo_irc_void,    ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+static const zend_function_entry metal_indirect_compute_command_methods[] = {
+    PHP_ME(Metal_IndirectComputeCommand, setComputePipelineState,         arginfo_icc_setPSO,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectComputeCommand, setKernelBuffer,                 arginfo_irc_setBuf,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectComputeCommand, concurrentDispatchThreadgroups,  arginfo_icc_dispatch,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectComputeCommand, concurrentDispatchThreads,       arginfo_icc_dispatch,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_IndirectComputeCommand, reset,                           arginfo_irc_void,      ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+void metal_register_indirect_command_classes(void)
+{
+    METAL_REGISTER_CLASS(indirect_render_command,  "IndirectRenderCommand",  metal_indirect_render_command_methods,  metal_indirect_render_command_handlers,  metal_ce_indirect_render_command,  ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES);
+    METAL_REGISTER_CLASS(indirect_compute_command, "IndirectComputeCommand", metal_indirect_compute_command_methods, metal_indirect_compute_command_handlers, metal_ce_indirect_compute_command, ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES);
+}
+
+/* ######################################################################
+ *  SECTION 11: Mesh Render Pipeline (macOS 13+)
+ * ###################################################################### */
+
+static zend_object_handlers metal_mesh_render_pipeline_descriptor_handlers;
+METAL_DEFINE_CREATE_FREE(mesh_render_pipeline_descriptor, metal_mesh_render_pipeline_descriptor_t, descriptor, metal_ce_mesh_render_pipeline_descriptor, &metal_mesh_render_pipeline_descriptor_handlers)
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, __construct)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor = [[MTLMeshRenderPipelineDescriptor alloc] init];
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setObjectFunction)
+{
+    zval *zfn;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zfn, metal_ce_metal_function) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.objectFunction = metal_function_from_obj(Z_OBJ_P(zfn))->function;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setMeshFunction)
+{
+    zval *zfn;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zfn, metal_ce_metal_function) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.meshFunction = metal_function_from_obj(Z_OBJ_P(zfn))->function;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setFragmentFunction)
+{
+    zval *zfn;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_OBJECT_OF_CLASS(zfn, metal_ce_metal_function) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.fragmentFunction = metal_function_from_obj(Z_OBJ_P(zfn))->function;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setMaxTotalThreadsPerObjectThreadgroup)
+{
+    zend_long val;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(val) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.maxTotalThreadsPerObjectThreadgroup = (NSUInteger)val;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setMaxTotalThreadsPerMeshThreadgroup)
+{
+    zend_long val;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(val) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.maxTotalThreadsPerMeshThreadgroup = (NSUInteger)val;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setMaxTotalThreadgroupsPerMeshGrid)
+{
+    zend_long val;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(val) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.maxTotalThreadgroupsPerMeshGrid = (NSUInteger)val;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setPayloadMemoryLength)
+{
+    zend_long val;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(val) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.payloadMemoryLength = (NSUInteger)val;
+}
+
+PHP_METHOD(Metal_MeshRenderPipelineDescriptor, setDepthAttachmentPixelFormat)
+{
+    zend_long fmt;
+    ZEND_PARSE_PARAMETERS_START(1, 1) Z_PARAM_LONG(fmt) ZEND_PARSE_PARAMETERS_END();
+    metal_mesh_render_pipeline_descriptor_from_obj(Z_OBJ_P(ZEND_THIS))->descriptor.depthAttachmentPixelFormat = (MTLPixelFormat)fmt;
+}
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_mrpd_construct, 0, 0, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_mrpd_setFn, 0, 1, IS_VOID, 0) ZEND_ARG_OBJ_INFO(0, fn, Metal\\MetalFunction, 0) ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_mrpd_setLong, 0, 1, IS_VOID, 0) ZEND_ARG_TYPE_INFO(0, v, IS_LONG, 0) ZEND_END_ARG_INFO()
+
+static const zend_function_entry metal_mesh_render_pipeline_descriptor_methods[] = {
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, __construct,                           arginfo_mrpd_construct, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setObjectFunction,                     arginfo_mrpd_setFn,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setMeshFunction,                       arginfo_mrpd_setFn,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setFragmentFunction,                   arginfo_mrpd_setFn,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setMaxTotalThreadsPerObjectThreadgroup,arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setMaxTotalThreadsPerMeshThreadgroup,  arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setMaxTotalThreadgroupsPerMeshGrid,    arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setPayloadMemoryLength,                arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_MeshRenderPipelineDescriptor, setDepthAttachmentPixelFormat,         arginfo_mrpd_setLong,  ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+void metal_register_mesh_shader_classes(void)
+{
+    METAL_REGISTER_CLASS(mesh_render_pipeline_descriptor, "MeshRenderPipelineDescriptor", metal_mesh_render_pipeline_descriptor_methods, metal_mesh_render_pipeline_descriptor_handlers, metal_ce_mesh_render_pipeline_descriptor, ZEND_ACC_NO_DYNAMIC_PROPERTIES);
 }
