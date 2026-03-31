@@ -14,7 +14,10 @@
 #include "php_metal.h"
 
 #import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
 #import <Foundation/Foundation.h>
+#import <AppKit/NSWindow.h>
+#import <AppKit/NSView.h>
 
 /* ====================================================================
  *  Data type constants for buffer read/write
@@ -111,7 +114,8 @@ typedef struct { MTLVertexAttributeDescriptor *descriptor;                    ze
 typedef struct { id<MTLSamplerState> state;                                   zend_object std; } metal_sampler_state_t;
 typedef struct { MTLSamplerDescriptor *descriptor;                            zend_object std; } metal_sampler_descriptor_t;
 typedef struct { id<MTLBlitCommandEncoder> encoder;                           zend_object std; } metal_blit_encoder_t;
-typedef struct { id<MTLDrawable> drawable;                                    zend_object std; } metal_drawable_t;
+typedef struct { id<CAMetalDrawable> drawable;                                zend_object std; } metal_drawable_t;
+typedef struct { CAMetalLayer *layer;                                         zend_object std; } metal_layer_t;
 
 /* ====================================================================
  *  Advanced object structs
@@ -168,6 +172,7 @@ static inline metal_sampler_state_t *metal_sampler_state_from_obj(zend_object *o
 static inline metal_sampler_descriptor_t *metal_sampler_descriptor_from_obj(zend_object *o) { return METAL_OBJ(metal_sampler_descriptor_t, o); }
 static inline metal_blit_encoder_t *metal_blit_encoder_from_obj(zend_object *o) { return METAL_OBJ(metal_blit_encoder_t, o); }
 static inline metal_drawable_t *metal_drawable_from_obj(zend_object *o) { return METAL_OBJ(metal_drawable_t, o); }
+static inline metal_layer_t    *metal_layer_from_obj(zend_object *o)    { return METAL_OBJ(metal_layer_t, o); }
 
 /* Advanced from_obj inline accessors */
 static inline metal_event_t *metal_event_from_obj(zend_object *o) { return METAL_OBJ(metal_event_t, o); }

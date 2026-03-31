@@ -48,6 +48,7 @@ extern zend_class_entry *metal_ce_sampler_state;
 extern zend_class_entry *metal_ce_sampler_descriptor;
 extern zend_class_entry *metal_ce_blit_encoder;
 extern zend_class_entry *metal_ce_drawable;
+extern zend_class_entry *metal_ce_layer;
 extern zend_class_entry *metal_ce_exception;
 
 /* Advanced classes */

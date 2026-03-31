@@ -42,6 +42,7 @@ zend_class_entry *metal_ce_sampler_state;
 zend_class_entry *metal_ce_sampler_descriptor;
 zend_class_entry *metal_ce_blit_encoder;
 zend_class_entry *metal_ce_drawable;
+zend_class_entry *metal_ce_layer;
 zend_class_entry *metal_ce_exception;
 
 /* Advanced class entries (defined in metal_advanced.c) */
@@ -96,6 +97,7 @@ static zend_object_handlers metal_sampler_state_handlers;
 static zend_object_handlers metal_sampler_descriptor_handlers;
 static zend_object_handlers metal_blit_encoder_handlers;
 static zend_object_handlers metal_drawable_handlers;
+static zend_object_handlers metal_layer_handlers;
 
 /* Structs, inline accessors, and macros are in metal_internal.h */
 
@@ -123,6 +125,7 @@ METAL_DEFINE_CREATE_FREE(sampler_state,            metal_sampler_state_t,       
 METAL_DEFINE_CREATE_FREE(sampler_descriptor,       metal_sampler_descriptor_t,       descriptor, metal_ce_sampler_descriptor,       &metal_sampler_descriptor_handlers)
 METAL_DEFINE_CREATE_FREE(blit_encoder,             metal_blit_encoder_t,             encoder,    metal_ce_blit_encoder,             &metal_blit_encoder_handlers)
 METAL_DEFINE_CREATE_FREE(drawable,                 metal_drawable_t,                 drawable,   metal_ce_drawable,                 &metal_drawable_handlers)
+METAL_DEFINE_CREATE_FREE(layer,                    metal_layer_t,                    layer,      metal_ce_layer,                    &metal_layer_handlers)
 
 /* ====================================================================
  *  Metal\GPU — free function
@@ -1106,7 +1109,7 @@ PHP_METHOD(Metal_CommandBuffer, presentDrawable)
     metal_command_buffer_t *intern = metal_command_buffer_from_obj(Z_OBJ_P(ZEND_THIS));
     metal_drawable_t *drw = metal_drawable_from_obj(Z_OBJ_P(zdrawable));
 
-    [intern->buffer presentDrawable:drw->drawable];
+    [intern->buffer presentDrawable:(id<MTLDrawable>)drw->drawable];
 }
 /* }}} */
 
@@ -3612,9 +3615,154 @@ static const zend_function_entry metal_sampler_descriptor_methods[] = {
 
 /* Empty method tables for types that are created internally only */
 static const zend_function_entry metal_render_pipeline_state_methods[] = { PHP_FE_END };
-static const zend_function_entry metal_drawable_methods[]              = { PHP_FE_END };
+/* {{{ proto Metal\Texture Metal\Drawable::getTexture() */
+PHP_METHOD(Metal_Drawable, getTexture)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    metal_drawable_t *intern = metal_drawable_from_obj(Z_OBJ_P(ZEND_THIS));
+    if (intern->drawable == nil) {
+        zend_throw_exception(metal_ce_exception, "Drawable is nil", 0);
+        RETURN_THROWS();
+    }
+    id<MTLTexture> tex = intern->drawable.texture;
+    if (tex == nil) {
+        zend_throw_exception(metal_ce_exception, "Drawable texture is nil", 0);
+        RETURN_THROWS();
+    }
+    METAL_WRAP_RETURN(texture, metal_texture_t, texture, metal_ce_texture, tex);
+}
+/* }}} */
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_Metal_Drawable_getTexture, 0, 0, Metal\\Texture, 0)
+ZEND_END_ARG_INFO()
+
+static const zend_function_entry metal_drawable_methods[] = {
+    PHP_ME(Metal_Drawable, getTexture, arginfo_Metal_Drawable_getTexture, ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
 static const zend_function_entry metal_sampler_state_methods[]         = { PHP_FE_END };
 static const zend_function_entry metal_depth_stencil_state_methods[]   = { PHP_FE_END };
+
+/* ====================================================================
+ *  Metal\Layer methods
+ * ==================================================================== */
+
+/* {{{ proto void Metal\Layer::__construct(int $nsWindowPtr, Metal\Device $device, int $pixelFormat)
+ *
+ * Creates a CAMetalLayer, sets its device and pixel format, and attaches
+ * it to the NSWindow identified by $nsWindowPtr (as returned by
+ * glfwGetCocoaWindow()).
+ */
+PHP_METHOD(Metal_Layer, __construct)
+{
+    zend_long ns_window_ptr;
+    zval *zdevice;
+    zend_long pixel_format;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_LONG(ns_window_ptr)
+        Z_PARAM_OBJECT_OF_CLASS(zdevice, metal_ce_device)
+        Z_PARAM_LONG(pixel_format)
+    ZEND_PARSE_PARAMETERS_END();
+
+    metal_layer_t *intern = metal_layer_from_obj(Z_OBJ_P(ZEND_THIS));
+    metal_device_t *dev   = metal_device_from_obj(Z_OBJ_P(zdevice));
+
+    @autoreleasepool {
+        CAMetalLayer *layer = [CAMetalLayer layer];
+        if (layer == nil) {
+            zend_throw_exception(metal_ce_exception, "Failed to create CAMetalLayer", 0);
+            RETURN_THROWS();
+        }
+
+        [layer setDevice:dev->device];
+        [layer setPixelFormat:(MTLPixelFormat)pixel_format];
+
+        /* Attach to the NSWindow's content view if a valid pointer was supplied */
+        if (ns_window_ptr != 0) {
+            NSWindow *nswindow = (__bridge NSWindow *)(void *)(uintptr_t)ns_window_ptr;
+            NSView   *view     = [nswindow contentView];
+            if (view != nil) {
+                [view setWantsLayer:YES];
+                [view setLayer:layer];
+            } else {
+                zend_throw_exception(metal_ce_exception, "NSWindow has no contentView", 0);
+                RETURN_THROWS();
+            }
+        }
+
+        intern->layer = layer;
+    }
+}
+/* }}} */
+
+/* {{{ proto void Metal\Layer::setDrawableSize(int $width, int $height) */
+PHP_METHOD(Metal_Layer, setDrawableSize)
+{
+    zend_long width, height;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(width)
+        Z_PARAM_LONG(height)
+    ZEND_PARSE_PARAMETERS_END();
+
+    metal_layer_t *intern = metal_layer_from_obj(Z_OBJ_P(ZEND_THIS));
+    if (intern->layer == nil) {
+        zend_throw_exception(metal_ce_exception, "CAMetalLayer is not initialised", 0);
+        RETURN_THROWS();
+    }
+
+    [intern->layer setDrawableSize:CGSizeMake((CGFloat)width, (CGFloat)height)];
+}
+/* }}} */
+
+/* {{{ proto Metal\Drawable Metal\Layer::nextDrawable() */
+PHP_METHOD(Metal_Layer, nextDrawable)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    metal_layer_t *intern = metal_layer_from_obj(Z_OBJ_P(ZEND_THIS));
+    if (intern->layer == nil) {
+        zend_throw_exception(metal_ce_exception, "CAMetalLayer is not initialised", 0);
+        RETURN_THROWS();
+    }
+
+    @autoreleasepool {
+        id<CAMetalDrawable> drawable = [intern->layer nextDrawable];
+        if (drawable == nil) {
+            zend_throw_exception(metal_ce_exception, "nextDrawable returned nil — frame timeout or layer misconfigured", 0);
+            RETURN_THROWS();
+        }
+
+        METAL_WRAP_RETURN(drawable, metal_drawable_t, drawable, metal_ce_drawable, drawable);
+    }
+}
+/* }}} */
+
+/* --- ArgInfo for Metal\Layer --- */
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_Metal_Layer___construct, 0, 0, 3)
+    ZEND_ARG_TYPE_INFO(0, nsWindowPtr, IS_LONG, 0)
+    ZEND_ARG_OBJ_INFO(0, device, Metal\\Device, 0)
+    ZEND_ARG_TYPE_INFO(0, pixelFormat, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_Metal_Layer_setDrawableSize, 0, 2, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, width,  IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, height, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_Metal_Layer_nextDrawable, 0, 0, Metal\\Drawable, 0)
+ZEND_END_ARG_INFO()
+
+/* --- Method table for Metal\Layer --- */
+
+static const zend_function_entry metal_layer_methods[] = {
+    PHP_ME(Metal_Layer, __construct,    arginfo_Metal_Layer___construct,    ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_Layer, setDrawableSize,arginfo_Metal_Layer_setDrawableSize, ZEND_ACC_PUBLIC)
+    PHP_ME(Metal_Layer, nextDrawable,   arginfo_Metal_Layer_nextDrawable,    ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
 
 /* ====================================================================
  *  Namespace functions
@@ -3664,6 +3812,7 @@ PHP_MINIT_FUNCTION(metal)
     METAL_REGISTER_CLASS(sampler_descriptor,       "SamplerDescriptor",         metal_sampler_descriptor_methods,         metal_sampler_descriptor_handlers,         metal_ce_sampler_descriptor,         ZEND_ACC_NO_DYNAMIC_PROPERTIES);
     METAL_REGISTER_CLASS(blit_encoder,             "BlitCommandEncoder",        metal_blit_encoder_methods,               metal_blit_encoder_handlers,               metal_ce_blit_encoder,               ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES);
     METAL_REGISTER_CLASS(drawable,                 "Drawable",                  metal_drawable_methods,                   metal_drawable_handlers,                   metal_ce_drawable,                   ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES);
+    METAL_REGISTER_CLASS(layer,                    "Layer",                     metal_layer_methods,                      metal_layer_handlers,                      metal_ce_layer,                      ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES);
 
     /* ----------------------------------------------------------------
      *  Constants — Metal\FLOAT, Metal\INT32, ...
