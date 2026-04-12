@@ -12,13 +12,24 @@ PHP extension for Apple's [Metal GPU API](https://developer.apple.com/metal/). R
 
 ## Installation
 
+### Via PIE (recommended)
+
 ```bash
-git clone https://github.com/hmennen90/php-metal-gpu.git
-cd php-metal
+pie install phpolygon/php-metal-gpu
+```
+
+### Pre-built Binaries
+
+Download platform-specific binaries from the [Releases](https://github.com/phpolygon/php-metal-gpu/releases) page. Available for macOS ARM64 (Apple Silicon) and x86_64 (Intel).
+
+### From Source
+
+```bash
+git clone https://github.com/phpolygon/php-metal-gpu.git
+cd php-metal-gpu
 phpize
 ./configure --enable-metal
-make
-make test
+make -j$(sysctl -n hw.ncpu)
 sudo make install
 ```
 
@@ -26,12 +37,6 @@ Then add to your `php.ini`:
 
 ```ini
 extension=metal
-```
-
-Or load it per-invocation:
-
-```bash
-php -d extension=metal your_script.php
 ```
 
 ## Quick Start
